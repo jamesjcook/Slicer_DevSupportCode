@@ -1,7 +1,8 @@
 #!/bin/bash
-pushd `pwd`
-cd /Applications/SegmentationSoftware/src/GalleryControl_Multi/CIVM_PGR
-./uninst.bash
-./cmake_command.bash
-./inst.bash
-popd
+#pushd `pwd`
+#/Applications/SegmentationSoftware/src/GalleryControl_Multi/
+#cd CIVM_GalleryControl
+bash ../Slicer_DevSupportCode/uninst.bash
+bash ../Slicer_DevSupportCode/./cmake_command.bash
+bash ../Slicer_DevSupportCode/./inst.bash
+#popd
