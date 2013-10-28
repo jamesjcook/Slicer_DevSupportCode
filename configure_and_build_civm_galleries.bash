@@ -1,9 +1,17 @@
 #!/bin/bash
 # ccmake command for life easier
+
+
+
+name=`basename $PWD`;
+checkout_v=`echo $name | cut -d '_' -f3`;
+appdir=/Applications/SegmentationSoftware/release_$checkout_v
+
 BUILD_TYPE=Release
 BUILD_ARCH=x86_64
-INSTALL_PREFIX=/Applications/SegmentationSoftware/release_app
-SUPERBUILD_SLICER=/Applications/SegmentationSoftware/build/Slicer_multi/extensions_s_x86_64_itk4_r_130906/Slicer-build/ 
+INSTALL_PREFIX=$appdir
+SUPERBUILD_SLICER=/Applications/SegmentationSoftware/build/Slicer_multi/${BUILD_TYPE}_${checkout_v}/Slicer-build/ 
+#SUPERBUILD_SLICER=/Applications/SegmentationSoftware/build/Slicer_multi/relase_${checkout_v}/Slicer-build/ 
 SOURCE_LOCATION=/Applications/SegmentationSoftware/src/GalleryControl_multi/CIVM_GalleryControl
 
 
