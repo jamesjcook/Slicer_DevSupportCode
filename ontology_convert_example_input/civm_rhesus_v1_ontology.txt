@@ -1,0 +1,246 @@
+Structure	Abbreviation	Level 1	Level 2	Level 3	Level 4	Value
+ventricles	LV	ventricles	ventricles	ventricles	ventricles	1
+medulla	Md	hindbrain	myelencephalon	medulla	medulla	2
+pons	Pn	hindbrain	metencephalon	pons	pons	3
+cerebellum	Cb	hindbrain	metencephalon	cerebellum	cerebellum	4
+midbrain	MB	midbrain	midbrain	midbrain	midbrain	5
+anterior pulvinar	Apul	forebrain	diencephalon	p2	thalamus	6
+anteromedial thalamic nucleus	AM#1	forebrain	diencephalon	p2	thalamus	7
+anteroventral thalamic nucleus	AV	forebrain	diencephalon	p2	thalamus	8
+central medial thalamic nucleus	CM#2	forebrain	diencephalon	p2	thalamus	9
+centrolateral thalamic nucleus	Cl#2	forebrain	diencephalon	p2	thalamus	10
+centromedian thalamic nucleus, lateral part	CMnL	forebrain	diencephalon	p2	thalamus	11
+centromedian thalamic nucleus, medial part	CMnM	forebrain	diencephalon	p2	thalamus	12
+inferior pulvinar	Ipul	forebrain	diencephalon	p2	thalamus	13
+interanteromedial thalamic nucleus	IAM	forebrain	diencephalon	p2	thalamus	14
+intermediodorsal thalamic nucleus	IMD	forebrain	diencephalon	p2	thalamus	15
+lateral dorsal thalamic nucleus, superficial part	LDSF	forebrain	diencephalon	p2	thalamus	16
+lateral pulvinar	Lpul	forebrain	diencephalon	p2	thalamus	17
+medial geniculate nucleus, dorsal part	MGD	forebrain	diencephalon	p2	thalamus	18
+medial geniculate nucleus, medial part	MGM	forebrain	diencephalon	p2	thalamus	19
+medial geniculate nucleus, ventral part	MGV	forebrain	diencephalon	p2	thalamus	20
+medial pulvinar	MPul	forebrain	diencephalon	p2	thalamus	21
+mediodorsal thalamic nucleus, central part	MDC	forebrain	diencephalon	p2	thalamus	22
+mediodorsal thalamic nucleus, dorsal part	MDD	forebrain	diencephalon	p2	thalamus	23
+mediodorsal thalamic nucleus, lateral part	MDL	forebrain	diencephalon	p2	thalamus	24
+mediodorsal thalamic nucleus, medial part	MDM	forebrain	diencephalon	p2	thalamus	25
+paracentral thalamic nucleus	Pc#3	forebrain	diencephalon	p2	thalamus	26
+parafascicular thalamic nucleus	Pf#2	forebrain	diencephalon	p2	thalamus	27
+paraventricular thalamic nucleus	PV	forebrain	diencephalon	p2	thalamus	28
+pulvinar nuclei	Pul#1	forebrain	diencephalon	p2	thalamus	29
+reticular thalamic nucleus	R#4	forebrain	diencephalon	p2	thalamus	30
+reuniens thalamic nucleus	Re	forebrain	diencephalon	p2	thalamus	31
+suprageniculate thalamic nucleus	SG	forebrain	diencephalon	p2	thalamus	32
+ventral anterior thalamic nucleus, lateral part, pallidal territory of thalamus	VAL(pal)	forebrain	diencephalon	p2	thalamus	33
+ventral anterior thalamic nucleus, lateral part, ventralis oralis nucleus+pallidal territory of thalamus	VAL(VO)+pal	forebrain	diencephalon	p2	thalamus	34
+ventral anterior thalamic nucleus, magnocellular part	VAMC	forebrain	diencephalon	p2	thalamus	35
+ventral anterior thalamic nucleus, medial part	VAM	forebrain	diencephalon	p2	thalamus	36
+ventral lateral thalamic nucleus, lateral part	VLL	forebrain	diencephalon	p2	thalamus	37
+ventral lateral thalamic nucleus, medial part	VLM#1	forebrain	diencephalon	p2	thalamus	38
+ventral posterolateral thalamic nucleus	VPL#1	forebrain	diencephalon	p2	thalamus	39
+ventral posteromedial thalamic nucleus	VPM	forebrain	diencephalon	p2	thalamus	40
+lateral geniculate nucleus	LGN	forebrain	diencephalon	p2	thalamus	41
+paraventricular thalamus	PVT	forebrain	diencephalon	p2	thalamus	42
+hypothalamus	Hy	forebrain	secondary prosencephalon	hypothalamus	hypothalamus	43
+bed nucleus of the stria terminalis central division	BST	forebrain	telencephalon	subpallium	central subpallium	44
+external globus pallidus	EGP	forebrain	telencephalon	subpallium	pallidum	45
+internal globus pallidus	IGP	forebrain	telencephalon	subpallium	pallidum	46
+ventral pallidum	VP#3	forebrain	telencephalon	subpallium	pallidum	47
+accumbens nucleus, core	AcbC	forebrain	telencephalon	subpallium	paraseptal subpallium	48
+accumbens nucleus, shell	AcbSh	forebrain	telencephalon	subpallium	paraseptal subpallium	49
+accumbens nucleus	Acb	forebrain	telencephalon	subpallium	paraseptal subpallium	50
+basal nucleus (Meynert)	BM#4	forebrain	telencephalon	subpallium	paraseptal subpallium	51
+nucleus of the horizontal limb of the diagonal band	HDB	forebrain	telencephalon	subpallium	paraseptal subpallium	52
+substantia innominata	SI	forebrain	telencephalon	subpallium	paraseptal subpallium	53
+caudate nucleus	Cd	forebrain	telencephalon	subpallium	striatum	54
+olfactory tubercle	Tu	forebrain	telencephalon	subpallium	striatum	55
+putamen	Pu	forebrain	telencephalon	subpallium	striatum	56
+amygdalohippocampal area	AHi	forebrain	telencephalon	subpallium	subpallial amygdala	57
+anterior amygdaloid area	AA	forebrain	telencephalon	subpallium	subpallial amygdala	58
+central amygdaloid nucleus, lateral division	CeL	forebrain	telencephalon	subpallium	subpallial amygdala	59
+central amygdaloid nucleus, medial division	CEm#1	forebrain	telencephalon	subpallium	subpallial amygdala	60
+bed nucleus of the stria terminalis intraamygdaloid division	BSTIA	forebrain	telencephalon	subpallium	subpallial amygdala	61
+septum	Se	forebrain	telencephalon	subpallium	subpallial septum	62
+dorsal endopiriform nucleus	DEn	forebrain	telencephalon	pallium	lateral pallium	63
+amygdalohippocampal area, magnocellular part	AHiMC	forebrain	telencephalon	pallium	ventral pallium	64
+amygdalohippocampal area, parvicellular part	AHiPC	forebrain	telencephalon	pallium	ventral pallium	65
+amygdalopiriform transition area	APir	forebrain	telencephalon	pallium	ventral pallium	66
+anterior olfactory nucleus	AO	forebrain	telencephalon	pallium	ventral pallium	67
+basolateral amygdaloid nucleus, dorsal part	BLD	forebrain	telencephalon	pallium	ventral pallium	68
+basolateral amygdaloid nucleus, intermediate part	BLI	forebrain	telencephalon	pallium	ventral pallium	69
+basolateral amygdaloid nucleus, ventral part	BLV	forebrain	telencephalon	pallium	ventral pallium	70
+basolateral amygdaloid nucleus, ventrolateral part	BLVL	forebrain	telencephalon	pallium	ventral pallium	71
+basolateral amygdaloid nucleus, ventromedial part	BLVM	forebrain	telencephalon	pallium	ventral pallium	72
+basolateral amygdaloid nucleus	BL#2	forebrain	telencephalon	pallium	ventral pallium	73
+basomedial amygdaloid nucleus	BM#3	forebrain	telencephalon	pallium	ventral pallium	74
+lateral amygdaloid nucleus	La#3	forebrain	telencephalon	pallium	ventral pallium	75
+medial amygdaloid nucleus	Me	forebrain	telencephalon	pallium	ventral pallium	76
+paralaminar amygdaloid nucleus	PaL	forebrain	telencephalon	pallium	ventral pallium	77
+piriform cortex	Pir	forebrain	telencephalon	pallium	ventral pallium	78
+ventral cortical amygdaloid nucleus, inferior part	VCoInf	forebrain	telencephalon	pallium	ventral pallium	79
+ventral cortical amygdaloid nucleus	VCo	forebrain	telencephalon	pallium	ventral pallium	80
+hippocampus	Hip	forebrain	telencephalon	dorsal pallium	hippocampus	81
+parasubiculum	PaS	forebrain	telencephalon	dorsal pallium	medial pallium	82
+presubiculum	PrS	forebrain	telencephalon	dorsal pallium	medial pallium	83
+prosubiculum	ProS#2	forebrain	telencephalon	dorsal pallium	medial pallium	84
+subiculum	S#1	forebrain	telencephalon	dorsal pallium	medial pallium	85
+agranular insular cortex	AI	forebrain	telencephalon	isocortex	insular cortex	86
+area 13 of cortex, lateral part	13L	forebrain	telencephalon	isocortex	insular cortex	87
+area 13 of cortex, medial part	13M	forebrain	telencephalon	isocortex	insular cortex	88
+area 13 of cortex	13	forebrain	telencephalon	isocortex	insular cortex	89
+area 13a of cortex	13a	forebrain	telencephalon	isocortex	insular cortex	90
+area 14 of cortex, medial part	14M	forebrain	telencephalon	isocortex	insular cortex	91
+area 14o	14o	forebrain	telencephalon	isocortex	insular cortex	92
+dysgranular insular cortex	DI#2	forebrain	telencephalon	isocortex	insular cortex	93
+granular insular cortex	GI	forebrain	telencephalon	isocortex	insular cortex	94
+insular proisocortex	IPro	forebrain	telencephalon	isocortex	insular cortex	95
+parainsular cortex, lateral part	PaIL	forebrain	telencephalon	isocortex	insular cortex	96
+parainsular cortex, medial part	PaIM	forebrain	telencephalon	isocortex	insular cortex	97
+area 23 of cortex	23	forebrain	telencephalon	isocortex	cingulate cortex	98
+area 23a of cortex	23a	forebrain	telencephalon	isocortex	cingulate cortex	99
+area 23b of cortex	23b	forebrain	telencephalon	isocortex	cingulate cortex	100
+area 23c of cortex	23c	forebrain	telencephalon	isocortex	cingulate cortex	101
+area 24/23a of cortex	24/23a	forebrain	telencephalon	isocortex	cingulate cortex	102
+area 24/23b of cortex	24/23b	forebrain	telencephalon	isocortex	cingulate cortex	103
+area 24/23c of cortex	24/23c	forebrain	telencephalon	isocortex	cingulate cortex	104
+area 24a of cortex	24a	forebrain	telencephalon	isocortex	cingulate cortex	105
+area 24b of cortex	24b	forebrain	telencephalon	isocortex	cingulate cortex	106
+area 24c of cortex	24c	forebrain	telencephalon	isocortex	cingulate cortex	107
+area 24d of cortex	24d	forebrain	telencephalon	isocortex	cingulate cortex	108
+area 29a of cortex	29a	forebrain	telencephalon	isocortex	cingulate cortex	109
+area 29a-c of cortex	29a-c	forebrain	telencephalon	isocortex	cingulate cortex	110
+area 29d of cortex	29d	forebrain	telencephalon	isocortex	cingulate cortex	111
+area 30 of cortex	30	forebrain	telencephalon	isocortex	cingulate cortex	112
+area 31 of cortex	31	forebrain	telencephalon	isocortex	cingulate cortex	113
+area 32 of cortex	32	forebrain	telencephalon	isocortex	cingulate cortex	114
+area PGM/31 of cortex	PGM/31	forebrain	telencephalon	isocortex	cingulate cortex	115
+cingulate gyrus	CG	forebrain	telencephalon	isocortex	cingulate cortex	116
+unnamed region sections 102-114, called 23 more anteriorly	23x	forebrain	telencephalon	isocortex	cingulate cortex	117
+occipitoparietal area	OPt	forebrain	telencephalon	isocortex	occipital cortex	118
+visual area 1 (primary visual cortex)	V1	forebrain	telencephalon	isocortex	occipital cortex	119
+visual area 2	V2	forebrain	telencephalon	isocortex	occipital cortex	120
+visual area 3, dorsal part	V3D	forebrain	telencephalon	isocortex	occipital cortex	121
+visual area 3, ventral part	V3V	forebrain	telencephalon	isocortex	occipital cortex	122
+visual area 3A	V3A	forebrain	telencephalon	isocortex	occipital cortex	123
+visual area 4, dorsal part	V4D	forebrain	telencephalon	isocortex	occipital cortex	124
+visual area 4, transitional part	V4T	forebrain	telencephalon	isocortex	occipital cortex	125
+visual area 4, ventral part	V4V	forebrain	telencephalon	isocortex	occipital cortex	126
+visual area 4	V4	forebrain	telencephalon	isocortex	occipital cortex	127
+visual area 4A	V4A	forebrain	telencephalon	isocortex	occipital cortex	128
+area 1 of cortex (somatosensory)	1#1	forebrain	telencephalon	isocortex	parietal cortex	129
+area 2 of cortex (somatosensory)	2#1	forebrain	telencephalon	isocortex	parietal cortex	130
+area 2 of cortex, vestibular part	2Ve	forebrain	telencephalon	isocortex	parietal cortex	131
+area 3a of cortex (somatosensory)	3a	forebrain	telencephalon	isocortex	parietal cortex	132
+area 3b of cortex (somatosensory)	3b	forebrain	telencephalon	isocortex	parietal cortex	133
+area 2/1 of cortex (somatosensory)	39844	forebrain	telencephalon	isocortex	parietal cortex	134
+depth intraparietal area	DIP	forebrain	telencephalon	isocortex	parietal cortex	135
+dorsal parietal area	Dpt	forebrain	telencephalon	isocortex	parietal cortex	136
+parietal area PE, caudal part	PEC	forebrain	telencephalon	isocortex	parietal cortex	137
+parietal area PE, cingulate part	PECg	forebrain	telencephalon	isocortex	parietal cortex	138
+parietal area PE	PE#1	forebrain	telencephalon	isocortex	parietal cortex	139
+parietal area PEa	PEa	forebrain	telencephalon	isocortex	parietal cortex	140
+parietal area PF (cortex)	PFCx	forebrain	telencephalon	isocortex	parietal cortex	141
+parietal area PF, opercular part	PFOp	forebrain	telencephalon	isocortex	parietal cortex	142
+parietal area PFG	PFG#1	forebrain	telencephalon	isocortex	parietal cortex	143
+parietal area PG, opercular part	PGOp	forebrain	telencephalon	isocortex	parietal cortex	144
+parietal area PG	PG#1	forebrain	telencephalon	isocortex	parietal cortex	145
+parietal area POa, external part	POaE	forebrain	telencephalon	isocortex	parietal cortex	146
+parietal area POa, internal part	POaI	forebrain	telencephalon	isocortex	parietal cortex	147
+parieto-occipital area	PO#1	forebrain	telencephalon	isocortex	parietal cortex	148
+parietooccipital associated area in the intraparietal sulcus	POa	forebrain	telencephalon	isocortex	parietal cortex	149
+posterior parietal area	PPt#1	forebrain	telencephalon	isocortex	parietal cortex	150
+retroinsular area, parietal part	ReIP	forebrain	telencephalon	isocortex	parietal cortex	151
+secondary somatosensory cortex, external part	S2E	forebrain	telencephalon	isocortex	parietal cortex	152
+secondary somatosensory cortex, internal part	S2I	forebrain	telencephalon	isocortex	parietal cortex	153
+secondary somatosensory cortex	S2	forebrain	telencephalon	isocortex	parietal cortex	154
+area 35 of cortex	35	forebrain	telencephalon	isocortex	temporal cortex	155
+area PG associated region of the superior temporal sulcus	PGa	forebrain	telencephalon	isocortex	temporal cortex	156
+area TF, medial part	TFM	forebrain	telencephalon	isocortex	temporal cortex	157
+area TL, rostral part (area 36R)	TLR(R36)	forebrain	telencephalon	isocortex	temporal cortex	158
+auditory koniocortex, lateral part	AKL	forebrain	telencephalon	isocortex	temporal cortex	159
+auditory koniocortex, medial part	AKM	forebrain	telencephalon	isocortex	temporal cortex	160
+entorhinal cortex, caudal limited part	ECL	forebrain	telencephalon	isocortex	temporal cortex	161
+entorhinal cortex, caudal part	EC#2	forebrain	telencephalon	isocortex	temporal cortex	162
+entorhinal cortex, lateral part, caudal division	ELC	forebrain	telencephalon	isocortex	temporal cortex	163
+entorhinal cortex, lateral part, rostral division	ELR	forebrain	telencephalon	isocortex	temporal cortex	164
+entorhinal cortex, rostral part	ER#1	forebrain	telencephalon	isocortex	temporal cortex	165
+entorhinal Cx, intermediate part	EI	forebrain	telencephalon	isocortex	temporal cortex	166
+entorhinal Cx, olfactory part	EOl	forebrain	telencephalon	isocortex	temporal cortex	167
+fundus of superior temporal sulcus	FST	forebrain	telencephalon	isocortex	temporal cortex	168
+intraparietal sulcus associated area in the superior temporal sulcus	IPa	forebrain	telencephalon	isocortex	temporal cortex	169
+juxtastriate area	JxSt	forebrain	telencephalon	isocortex	temporal cortex	170
+medial superior temporal area	MST	forebrain	telencephalon	isocortex	temporal cortex	171
+middle temporal area (visual area 5)	MT(V5)	forebrain	telencephalon	isocortex	temporal cortex	172
+paraauditory area, caudal part	PaAC	forebrain	telencephalon	isocortex	temporal cortex	173
+paraauditory area, lateral part	PaAL	forebrain	telencephalon	isocortex	temporal cortex	174
+paraauditory cortex, rostral part	PaAR	forebrain	telencephalon	isocortex	temporal cortex	175
+prokoniocortex, lateral part	ProKL	forebrain	telencephalon	isocortex	temporal cortex	176
+prokoniocortex, medial part	ProKM	forebrain	telencephalon	isocortex	temporal cortex	177
+prokoniocortex	ProK	forebrain	telencephalon	isocortex	temporal cortex	178
+prostriate area	ProST	forebrain	telencephalon	isocortex	temporal cortex	179
+retroinsular area, temporal part	ReIT	forebrain	telencephalon	isocortex	temporal cortex	180
+retroinsular area	ReI	forebrain	telencephalon	isocortex	temporal cortex	181
+superior temporal sulcus area 1	ST1	forebrain	telencephalon	isocortex	temporal cortex	182
+superior temporal sulcus area 3	ST3	forebrain	telencephalon	isocortex	temporal cortex	183
+superior temporal sulcus area, gyral part	ST2g	forebrain	telencephalon	isocortex	temporal cortex	184
+superior temporal sulcus area, sulcal part	ST2s	forebrain	telencephalon	isocortex	temporal cortex	185
+temporal area TAa	TAa	forebrain	telencephalon	isocortex	temporal cortex	186
+temporal area TE, medial part	TEM	forebrain	telencephalon	isocortex	temporal cortex	187
+temporal area TE, occipital part	TEO	forebrain	telencephalon	isocortex	temporal cortex	188
+temporal area TE, occipitomedial part	TEOM	forebrain	telencephalon	isocortex	temporal cortex	189
+temporal area TE1	TE1#1	forebrain	telencephalon	isocortex	temporal cortex	190
+temporal area TE2	TE2#1	forebrain	telencephalon	isocortex	temporal cortex	191
+temporal area TE3	TE3#1	forebrain	telencephalon	isocortex	temporal cortex	192
+temporal area TEa	TEa#1	forebrain	telencephalon	isocortex	temporal cortex	193
+temporal area TF, lateral part	TFL	forebrain	telencephalon	isocortex	temporal cortex	194
+temporal area TF, occipital part	TFO	forebrain	telencephalon	isocortex	temporal cortex	195
+temporal area TF	TF	forebrain	telencephalon	isocortex	temporal cortex	196
+temporal area TH, occipital part	Tho	forebrain	telencephalon	isocortex	temporal cortex	197
+temporal area TH	TH	forebrain	telencephalon	isocortex	temporal cortex	198
+temporal area TL, occipital part (area 36O)	TLO(36O)	forebrain	telencephalon	isocortex	temporal cortex	199
+temporal area TL	TL	forebrain	telencephalon	isocortex	temporal cortex	200
+temporal parietooccipital associated area in sts, caudal part	TPOC	forebrain	telencephalon	isocortex	temporal cortex	201
+temporal parietooccipital associated area in sts	TPO	forebrain	telencephalon	isocortex	temporal cortex	202
+temporoparietal cortex	Tpt	forebrain	telencephalon	isocortex	temporal cortex	203
+temporopolar periallocortex	TTPAl	forebrain	telencephalon	isocortex	temporal cortex	204
+temporopolar proisocortex	TPPro	forebrain	telencephalon	isocortex	temporal cortex	205
+area 4 of cortex (primary motor)	4#1	forebrain	telencephalon	isocortex	frontal cortex	206
+area 6 of cortex, dorsocaudal part (Matellis F2)	6DC(F2)	forebrain	telencephalon	isocortex	frontal cortex	207
+area 6 of cortex, dorsorostral part (Matellis F7)	6DR(F7)	forebrain	telencephalon	isocortex	frontal cortex	208
+area 6 of cortex, medial (supplementary motor) part	6M	forebrain	telencephalon	isocortex	frontal cortex	209
+area 6 of cortex, ventral part, caudal subdivision (Matellis F4)	6VC(F4)	forebrain	telencephalon	isocortex	frontal cortex	210
+area 6 of cortex, ventral part, rostral subdivision (Matellis F5)	6VR(F5)	forebrain	telencephalon	isocortex	frontal cortex	211
+area 6/32 of cortex	10379	forebrain	telencephalon	isocortex	frontal cortex	212
+area 8 of cortex, anterodorsal part	8AD	forebrain	telencephalon	isocortex	frontal cortex	213
+area 8 of cortex, anteroventral part	8AV	forebrain	telencephalon	isocortex	frontal cortex	214
+area 8/32 of cortex	10440	forebrain	telencephalon	isocortex	frontal cortex	215
+area 8A of cortex	8A	forebrain	telencephalon	isocortex	frontal cortex	216
+area 8B of cortex	8B	forebrain	telencephalon	isocortex	frontal cortex	217
+area 9 of cortex, lateral part	9L	forebrain	telencephalon	isocortex	frontal cortex	218
+area 9 of cortex, medial part	9M	forebrain	telencephalon	isocortex	frontal cortex	219
+area 9/32 of cortex	10471	forebrain	telencephalon	isocortex	frontal cortex	220
+area 9/46 of cortex, dorsal part	9/46D	forebrain	telencephalon	isocortex	frontal cortex	221
+area 9/46 of cortex, ventral part	9/46V	forebrain	telencephalon	isocortex	frontal cortex	222
+area 9/46 of cortex	15584	forebrain	telencephalon	isocortex	frontal cortex	223
+area 10 of cortex, dorsal part	10D	forebrain	telencephalon	isocortex	frontal cortex	224
+area 10 of cortex, medial part	10M	forebrain	telencephalon	isocortex	frontal cortex	225
+area 10 of cortex, ventral part	10V	forebrain	telencephalon	isocortex	frontal cortex	226
+area 10 of cortex	10	forebrain	telencephalon	isocortex	frontal cortex	227
+area 11 of cortex, lateral part	11L	forebrain	telencephalon	isocortex	frontal cortex	228
+area 11 of cortex, medial part	11m	forebrain	telencephalon	isocortex	frontal cortex	229
+area 11 of cortex	11	forebrain	telencephalon	isocortex	frontal cortex	230
+area 25 of cortex	25	forebrain	telencephalon	isocortex	frontal cortex	231
+area 44 of cortex	44	forebrain	telencephalon	isocortex	frontal cortex	232
+area 45A of cortex	45A	forebrain	telencephalon	isocortex	frontal cortex	233
+area 45B of cortex	45B	forebrain	telencephalon	isocortex	frontal cortex	234
+area 46D of cortex	46D	forebrain	telencephalon	isocortex	frontal cortex	235
+area 46V of cortex	46V	forebrain	telencephalon	isocortex	frontal cortex	236
+area 47 (old 12) of cortex, lateral part	47(12)L	forebrain	telencephalon	isocortex	frontal cortex	237
+area 47 (old 12) of cortex, orbital part	47(12)O	forebrain	telencephalon	isocortex	frontal cortex	238
+area 47 (old 12) of cortex	47(12)	forebrain	telencephalon	isocortex	frontal cortex	239
+area ProM (promotor)	proM#1	forebrain	telencephalon	isocortex	frontal cortex	240
+gustatory cortex	Gu	forebrain	telencephalon	isocortex	frontal cortex	241
+orbital periallocortex	OPAl	forebrain	telencephalon	isocortex	frontal cortex	242
+orbital proisocortex	OPro	forebrain	telencephalon	isocortex	frontal cortex	243
+external medullary lamina	eml	forebrain	white matter	white matter	white matter	244
+cerebral white matter	cwm	forebrain	white matter	white matter	white matter	245
