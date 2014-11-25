@@ -5,7 +5,17 @@
 # checks the hard coded label look up table to make sure the name listed there matches the name in MRML file. 
 # 
 # loads tab sheet and operates over every line of that file. 
-#.
+#   renames modelhierarchynodes to the name of interest as it goes.
+#   creates a full hierarchy hash as it goes, attaches structure to highest level element.
+#   checks the lookuptable mentioned for the correct entry, and replaces incorrect ones. Does not check vtk filename.
+#
+# saves updated mrml to mrml_mrh.
+# clears nodes besides the modelhierarchy and dispaly, then saves mrml as mrml_template.
+#
+# TODO 
+# for tractograyphdisplay, some intelligent way, copy 3n_l settings to other tratography nodes. (specifically copy percentage display, and color by segment.)
+# lets make tractography repair a second file. 
+
 
 use strict;
 use warnings;
