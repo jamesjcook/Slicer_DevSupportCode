@@ -57,7 +57,7 @@ my $outmrml=$ARGV[2];
 my $rename_type=$ARGV[3];
 my $outmrml_n;
 if ( ! defined $inmrml ) { 
-    print("ERROR: no mrml specified");
+    print("specifiy at least csv, mrml.optionally specify output and rename type(clean|ontology|abrev) ERROR: no mrml specified");
     exit;
 }
 if ( ! defined $rename_type ) { 
