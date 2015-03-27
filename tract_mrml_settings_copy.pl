@@ -82,7 +82,7 @@ for(my $ri=1;$ri<=$#src_nodes;$ri++){
 #    print($src_nodes[($ri-1)]->{"name"}."\n");
     if ( mrml_node_diff($n1,$n2) ) { 
 	#warn("more nodes found than expected!($#src_nodes)".join(@src_nodes,' ')."\n");
-	exit("more nodes found than expected!($#src_nodes)".join(@src_nodes,' ')."\n");
+	error_out("more nodes found than expected!($#src_nodes)\n".join("\n",@src_nodes)."\n");
     }   
 }
 
