@@ -36,13 +36,14 @@ use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_consta
 use Data::Dump qw(dump);
 
 
-my $inpath=$ARGV[0];
-my $inmrml=$ARGV[1];
-my $rename_type=$ARGV[3];
-my $color_table_out="";
+
+my $inmrml=$ARGV[0];
+#my $inpath=$ARGV[1];
+my $rename_type=$ARGV[1];
+#my $color_table_out="";
 my $outmrml=$ARGV[2];
 my $outmrml_n;
-my @color_table;
+#my @color_table;
 if ( ! defined $inmrml ) { 
     print("ERROR: no mrml specified");
     exit;
@@ -63,18 +64,18 @@ if ( ! defined $rename_type ) {
     print("Auto mrml out will be \"$outmrml\".\n") if ( ! defined $outmrml ) ;
 }
 
-load_file_to_array($inpath,\@color_table);
+#load_file_to_array($inpath,\@color_table);
 my ($xml_data,$xml_parser)=xml_read($inmrml,'giveparser');
-{
-    my ($n,$p,$e)=fileparts($inpath);
-     $color_table_out=$p.$n."_$rename_type".$e;
-}
+#{
+#    my ($n,$p,$e)=fileparts($inpath);
+#     $color_table_out=$p.$n."_$rename_type".$e;
+#}
 
-print("colortable ".($#color_table+1)." lines loaded\n");
+#print("colortable ".($#color_table+1)." lines loaded\n");
 mrml_clear_nodes($xml_data,("ModelHierarchy","ModelDisplay","Model","ModelStorage","Version", "UserTags"));
 mrml_to_file($xml_data,'  ',0,'pretty','',$outmrml_n);
 if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq 'abrev') {
     mrml_clear_nodes($xml_data,("ModelHierarchy","ModelDisplay","Version", "UserTags"));
     mrml_to_file($xml_data,'  ',0,'pretty','',$outmrml);
-    write_array_to_file($color_table_out,\@color_table);
+#    write_array_to_file($color_table_out,\@color_table);
 }

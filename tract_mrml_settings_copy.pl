@@ -42,19 +42,23 @@ require pipeline_utilities;
 use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);di
 
 use Data::Dump qw(dump);
-
+#$debug_val=100;
 #obj_template_name
 #obj_attrib
 my ($src_nodename,@src_attribs)=split(',',$ARGV[0]);
 
-my $inmrml=$ARGV[1];
-my $outmrml=$ARGV[2];
+my $inmrml  = $ARGV[1];
+my $outmrml  = $ARGV[2];
 my $mrml_dupe;
 if ( ! defined $inmrml ) { 
     print("ERROR: no mrml specified");
     exit;
 }
 
+if ( $#src_attribs<0 ) {
+    print ("ERROR: did not split attributes properly: < ".$ARGV[0].">\n");
+    exit;
+}
 
 my ($n,$p,$e)=fileparts($inmrml);
 $mrml_dupe=$p.$n."_dup".$e;
@@ -64,8 +68,9 @@ if ( ! defined $outmrml) {
 }
 my ($xml_data,$xml_parser)=xml_read($inmrml,'giveparser');
 
-if(0){
-    dump($xml_parser);
+if($debug_val>50){
+#    dump($xml_parser);
+#    dump($xml_data);
 }
 mrml_to_file($xml_data,'  ',0,'pretty','',$mrml_dupe);
 
@@ -85,6 +90,12 @@ for(my $ri=1;$ri<=$#src_nodes;$ri++){
 	error_out("more nodes found than expected!($#src_nodes)\n".join("\n",@src_nodes)."\n");
     }   
 }
+if ( $#src_nodes<0 )
+{
+    print("ERROR: didnt find desired node\n");
+    exit;
+}
+
 
 
 #my $mrml_att_ref=mrml_find_attrs($src_nodes[1],("ref","diplayNodeRef"));
