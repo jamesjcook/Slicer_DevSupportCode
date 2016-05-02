@@ -1,0 +1,14 @@
+# Color table file C:/src/HierarchyHandlingExampleData/ex_color_table.txt
+# 132 values
+0 _0_Exterior 0 0 0 0
+1 Cingulate_Cortex_Area_24a 255 0 0 255
+9 Cingulate_Cortex_Area_32 0 59 255 255
+10 Primary_Auditory_Cortex 55 0 255 255
+11 Secondary_Auditory_Cortex_Dorsal_Part 169 0 255 255
+13 Dorsolateral_Orbital_Cortex 255 0 114 255
+18 Lateral_Parietal_Association_Cortex 17 220 240 255
+26 Primary_Somatosensory_Cortex_Dysgranular_Zone 255 0 103 255
+40 Secondary_Visual_Cortex_Mediomedial_Area 255 31 0 255
+41 Ventral_Orbital_Cortex 255 155 0 255
+47 Claustrum 0 141 255 255
+131 Posterior_Commissure 255 227 0 255
