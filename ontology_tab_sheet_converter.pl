@@ -55,6 +55,7 @@ my @ontology_mrml;
 my $inmrml=$ARGV[1];
 my $outmrml=$ARGV[2];
 my $rename_type=$ARGV[3];
+my $model_prefix="Model_";
 my $outmrml_n;
 if ( ! defined $inmrml ) { 
     print("specifiy at least csv, mrml.optionally specify output and rename type(clean|ontology|abrev) ERROR: no mrml specified");
@@ -133,8 +134,12 @@ if(0){
 # } 
 
 my @color_table;
-load_file_to_array("civm_rhesus_v1_verbose_labels_lookup_a.txt",\@color_table);
-my $color_table_out="civm_rhesus_v1_verbose_labels_lookup_a_template.txt";
+#load_file_to_array("civm_rhesus_v1_verbose_labels_lookup_a.txt",\@color_table);
+#load_file_to_array("ex_data_and_xml/ex_color_table.txt",\@color_table);
+#my $color_table_out="ex_data_and_xml/ex_color_table_out.txt";
+
+load_file_to_array("ex_color_table.txt",\@color_table);
+my $color_table_out="ex_color_table_out.txt";
 @ontology_mrml=mrml_find_by_id($xml_data,".*");
 #display_complex_data_structure(\@refs,'  ')
 
@@ -162,7 +167,11 @@ my %onto_hash=();
 my $line=shift(@ontology_csv);
 $line =~ s/[ ]/_/gx;#space for underscore.
 @parts = $line =~ /([^\t]+)/gx;
-if($#col_headers==-1 && $#parts >= 5){
+if ( $#parts < 3) {
+    warn("Used commas instead of tabs, You better have clean names.");
+    @parts = $line =~ /([^,]+)/gx;
+}
+if($#col_headers==-1 && $#parts >= 3){
     print("col_headers assign:".join(" ",@parts)."\n");
     @col_headers=@parts;
 }
@@ -172,20 +181,24 @@ my @d_name;    #intput dirty name files found
 my @d_n_found; # output dirty name files found
 my @c_name;    #input clean name files found
 my @c_n_found; # output clean name files found
-my $do_unsafe=0;
+my $do_unsafe=1;
 my ($process_abrev_names,$process_full_names)=(0,0);
 my @model_hierarchy_nodes=mrml_find_by_name($xml_data,".*","ModelHierarchy");# should return only ModelHierarchyNodes
 foreach $line (@ontology_csv) {
 #     @parts=split("\t",$line);
     #
     @parts = $line =~ /([^\t]+)/gx;
+    if ( $#parts < 3) {
+	warn("Used commas instead of tabs, You better have clean names.");
+	@parts = $line =~ /([^,]+)/gx;
+    }
     chomp(@parts);
     #
     #print(join(':',@parts)."\n");
     if ( 0 ) { 
 	#print("$#parts");
 	#print("$#parts:$line\n");
-    } elsif ( $#parts >= 6) {  # say important line starts with "num_procs" ( it does) 
+    } elsif ( $#parts >= 3) {
 	#print("......");
 	
 	### INACTIVE
@@ -261,7 +274,7 @@ foreach $line (@ontology_csv) {
 		#$alt_name=~ s/\(/\\(/gx;
 		#$alt_name=~ s/\)/\\)/gx;
 		$c_fn=$alt_name;
-		my $file_name="v1_${value}_${alt_name}";
+		my $file_name="$model_prefix${value}_${alt_name}";
 		my $file_dest='Static_Render/ModelTree/'.join('/',@parts)."/$file_name.vtk";
 		$file_dest="$s_path/$file_name.vtk";
 		$file_dest=~ s/[ ]/_/gx;
@@ -296,7 +309,8 @@ foreach $line (@ontology_csv) {
 			    if($alt_name ne $ct_entry[1]) {
 				print("COLORTABLE NAME FAILURE($value) generated : $alt_name, colortable $ct_entry[1]\n");
 			    }
-			    $ct_entry[1]="v1_${value}_$alt_name";
+			    #$ct_entry[1]="$model_prefix${value}_$alt_name";
+			    $ct_entry[1]="$alt_name";
 			    #$color_table[$ct_i]=join(@ct_entry,' ');
 			    $color_table[$ct_i]=join(' ',@ct_entry)."\n";
 			}
@@ -330,8 +344,8 @@ foreach $line (@ontology_csv) {
 			if($rename_type eq 'clean' ){
 			    $mrml_node->{"name"}="$alt_name";
 			} elsif($rename_type eq 'modelfile' ){
-			    $mrml_node->{"name"}="v1_${value}_$alt_name";
-			    $node->{"name"}="v1_${value}_$alt_name";
+			    $mrml_node->{"name"}="$model_prefix${value}_$alt_name";
+			    $node->{"name"}="$model_prefix${value}_$alt_name";
 			} elsif( $rename_type eq 'ontology')  {
 			    $mrml_node->{"name"}="$name";
 			    $node->{"name"}="$name";
@@ -339,8 +353,8 @@ foreach $line (@ontology_csv) {
 			    $mrml_node->{"name"}="$abrev";
 			    $node->{"name"}="$abrev";
 			} else { 
-			    $mrml_node->{"name"}="v1_${value}_$alt_name";
-			    $node->{"name"}="v1_${value}_$alt_name";
+			    $mrml_node->{"name"}="$model_prefix${value}_$alt_name";
+			    $node->{"name"}="$model_prefix${value}_$alt_name";
 			}
 		    }
 		}
@@ -357,7 +371,7 @@ foreach $line (@ontology_csv) {
 	    #$alt_name=~ s/\(/\\(/gx;
 	    #$alt_name=~ s/\)/\\)/gx;
 	    $a_fn=$alt_name;
-	    my $file_name="v1_${value}_${alt_name}";
+	    my $file_name="$model_prefix${value}_${alt_name}";
 	    my $file_dest="Static_Render/LabelModels_abrev/$file_name.vtk";
 	    my $file_src="Static_Render/ModelTree/$file_name.vtk";
 	    @a_path=($file_src,$file_dest);
@@ -445,7 +459,7 @@ my @list=keys(%l_1);
 for my $kn (@list)  {
     my @s_list=@{$l_1{$kn}};
     #print("\t$kn:$#{$l_1{$kn}}\n");
-    #print("(v1_".join('_|v1_',@{$l_1{$kn}}),")\n");#elements regex
+    #print("($model_prefix".join('_|$model_prefix',@{$l_1{$kn}}),")\n");#elements regex
 }
 #display_complex_data_structure(\%onto_hash,'  ',0,'noleaves'); # noleaves doenst exactly work because some trees have twigs foreach leaf
 #display_complex_data_structure(\%onto_hash);
