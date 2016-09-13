@@ -19,6 +19,10 @@
 
 use strict;
 use warnings;
+use Data::Dump qw(dump);
+use Clone qw(clone);
+use Getopt::Std;# qw(getopts);
+use File::Basename;
 
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
@@ -46,11 +50,8 @@ require Headfile;
 #require shared;
 require pipeline_utilities;
 use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);di
+use text_sheet_utils;
 #use xml_read qw(xml_read);
-use Data::Dump qw(dump);
-use Clone qw(clone);
-use Getopt::Std;# qw(getopts);
-use File::Basename;
 our %opt;
 if (! getopts('c:h:m:o:t:', \%opt||$#ARGV>=0)) {
     die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (clean|Abbrev|modelfile|ontology))?";
@@ -62,7 +63,7 @@ if (! getopts('c:h:m:o:t:', \%opt||$#ARGV>=0)) {
 
 my @ontology_csv; 
 #my $ontology_inpath=$ARGV[0];
-my $ontology_inpath=$opt{"h"};#$opt{""};
+my $p_ontology_in=$opt{"h"};#$opt{""};
 my @mrml_nodes_loaded;
 #my $p_mrml_in=$ARGV[1];
 my $p_mrml_in=$opt{"m"};
@@ -97,12 +98,8 @@ if ( 1 )
 
 my ($Tn,$Tp,$Te)=fileparse($p_color_table_in);
 my $p_color_table_out=$Tp.$Tn."_out".$Te;
-my @color_table_lines;
-#load_file_to_array("civm_rhesus_v1_verbose_labels_lookup_a.txt",\@color_table_lines);
-#load_file_to_array("ex_data_and_xml/ex_color_table_lines.txt",\@color_table_lines);
-#my $color_table_out="ex_data_and_xml/ex_color_table_out.txt";
 
-load_file_to_array($p_color_table_in,\@color_table_lines);
+
 ###
 # color_table parse.
 ###
@@ -113,96 +110,43 @@ load_file_to_array($p_color_table_in,\@color_table_lines);
 # and name to value, rgba,
 # and Abbrev to value, rgba.
 # should these be hashes of 5 element arrarys?
-my $c_table;
-$c_table->{"Structure"}={};
-$c_table->{"Abbrev"}={};
-$c_table->{"Name"}={};
-# this loop sets up a nice comprehensive lookup structure for the color table.
-# for the primary keys of "structure Abbreviation and name", make a hash of primary key to the colortable info for each color table entry
-foreach my $c_line (@color_table_lines) {
-    if ( $c_line !~ /^#.*/ ) {# if not comment.
-	my @ct_entry=split(' ',$c_line);
-	# color table is form of,
-	# VALUE NAME RED GREEN BLUE ALPHA
-	
-	# the expected format of our colortable comes from the avizo name format of alex. 
-	# the names used in avizo were "_?abbreviation__(_?)fullterribly_long_structure_name"
-	# some names add additional instances of double underscore. its uncertain what that was about. 
-	my ($c_Abbrev,$c_name)= $ct_entry[1] =~/^_?(.+?)(?:___?(.*))$/;
-	if(not defined $c_Abbrev) {
-	    use List::Util qw(first max maxstr min minstr reduce shuffle sum);
-	    my $maxn=min(20,length($ct_entry[1]));
-	    $c_Abbrev=substr($ct_entry[1],0,$maxn);
-	}
-	if(not defined $c_name) {
-	    $c_name=$c_Abbrev;
-	}
-	#dump(@ct_entry[0,2..5]);
-	# basic lookups. 
-	#$c_table->{"Structure"}->{"$ct_entry[1]"}=[@ct_entry[0,2..5]];
-	#$c_table->{"Abbrev"}->{$c_Abbrev}=[@ct_entry[0,2..5]];
-	#$c_table->{"name"}->{$c_name}=[@ct_entry[0,2..5]];
-	if ( 1 ) {
-	    #my @stv{qw(Structure Abbrev name)}=($ct_entry[1], $c_Abbrev, $c_name);
-	    #my @stv{qw[Structure Abbrev name]}=($ct_entry[1], $c_Abbrev, $c_name);
-	    #my %stv=qw(Structure Abbrev name)[$ct_entry[1], $c_Abbrev, $c_name];
-	    #my @stv=qw(Structure Abbrev name)[$ct_entry[1], $c_Abbrev, $c_name];
-	    my %stv;
-	    @stv{qw(Structure Abbrev Name)}=($ct_entry[1], $c_Abbrev, $c_name);
-	    #dump(\%stv);
-	    #exit;
-	    # advanced lookups.
-	    if ( 1 ) {
-		
-		my $c_t_e = {
-		    "Value" => $ct_entry[0], 
-		    "c_R" => $ct_entry[2],
-		    "c_G" => $ct_entry[3],
-		    "c_B" => $ct_entry[4],
-		    "c_A" => $ct_entry[5],
-		};
-		# combine hash overwriting values using this example. My usage and setup here is rather complicated.
-		#my %t = %target;
-		#@t{keys %source} = values %source;
-		@{$c_t_e}{(keys %stv)} =values %stv;
-		#delete($c_table->{$sub_tree}->{$stv{$sub_tree}}->{$sub_tree});
 
-		for my $sub_tree (keys %stv) {
-		    $c_table->{$sub_tree}->{$stv{$sub_tree}}=$c_t_e;
-#		    last;
-		}
-	    } else {
-	    for my $sub_tree (keys %stv) {
-		$c_table->{$sub_tree}->{$stv{$sub_tree}} = {
-		    "Value" => $ct_entry[0], 
-		    "c_R" => $ct_entry[2],
-		    "c_G" => $ct_entry[3],
-		    "c_B" => $ct_entry[4],
-		    "c_A" => $ct_entry[5],
-		};
-		# combine hash overwriting values using this example. My usage and setup here is rather complicated.
-		#my %t = %target;
-		#@t{keys %source} = values %source;
-		@{$c_table->{$sub_tree}->{$stv{$sub_tree}}}{(keys %stv)} =values %stv;
-		delete($c_table->{$sub_tree}->{$stv{$sub_tree}}->{$sub_tree});
-	    }}
-	}
-    }
-}
+# VALUE NAME RED GREEN BLUE ALPHA
+my $header={};
+#$header->{"Structure"}=-1;
+#$header->{"Abbrev"}=-1;
+$header->{"Value"}=0;
+$header->{"Name"}=1;
+$header->{"c_R"}=2;
+$header->{"c_B"}=3;
+$header->{"c_G"}=4;
+$header->{"c_A"}=5;
 
+my $splitter={};#
+# a aplitter to split a field into alternat parts. 
+#	my ($c_Abbrev,$c_name)= $tt_entry[1] =~/^_?(.+?)(?:___?(.*))$/;
+### This splitter Regex is for the alex badea style color tables.
+$splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
+#$splitter->{"Regex"}='^.*$';# taking this regex
+$splitter->{"Input"}=[qw(Name Structure)];# reformulate this var, keeping original in other
+$splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
+$header->{"Splitter"}=$splitter;
+$header->{"LineFormat"}='^#.*';
+$header->{"Separator"}=" ";
 
+my $c_table=text_sheet_utils::loader($p_color_table_in,$header);
 #dump($c_table);
-my $Tr;
-#$Tr=$c_table->{"Abbrev"};
+
+#my $Tr;
+#p$Tr=$c_table->{"Abbrev"};
 #dump($Tr);
 #$Tr=$c_table->{"Name"};
 #dump($Tr);
 #$Tr=$c_table->{"Structure"};
 #dump($Tr);
-
+my @color_table_lines;
 #exit;
-
-load_file_to_array($ontology_inpath,\@ontology_csv);
+load_file_to_array($p_ontology_in,\@ontology_csv);
 #my $parser=xml_read($p_mrml_in);
 #my $xml_data=xml_read($p_mrml_in);
 #print("THE END\n");exit;
@@ -267,6 +211,18 @@ my %onto_hash=();
 ###
 # determine the different file names and paths per each convention.
 # move files into appropriate destination place, from starting place/places.
+
+$splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
+#$splitter->{"Regex"}='^.*$';# taking this regex
+$splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
+$splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
+
+my $h_info={};
+$h_info->{"Splitter"}=$splitter;
+$header->{"LineFormat"}='^#.*';
+#$header->{"Separator"}=" ";
+my $csv_data_file=text_sheet_utils::loader($p_ontology_in,$h_info);
+
 
 #pull the column headers off the csv file, clean up their names.
 my $line=shift(@ontology_csv);
@@ -334,13 +290,24 @@ if (  $#vtkMRMLHierarchyNodes>=0 ) {#there is at least one node.
 }
 
 
+####
+# New method, we have our text spreadsheets loaded.
+####
+# we should look at each models from the xml, or from the color table.
+#foreach model in xml_data
+#  while level_next exists, check for level, add it
+#  add wiring....?
 
+
+
+exit;
 foreach $line (@ontology_csv) {
     chomp($line);
-    @parts = $line =~ /([^\t]+)/gx;# WHY DIDNT I USE SPLIT!!!!!
+    #@parts = $line =~ /([^\t]+)/gx;# WHY DIDNT I USE SPLIT!!!!!
+    @parts = split("\t",$line);
     if ( $#parts < 3) {
 	warn("Used commas instead of tabs, You better have clean names.") unless ($debug_val<45);
-	@parts = $line =~ /([^,]+)/gx;# WHY DIDNT I USE SPLIT!!!!!
+	#@parts = $line =~ /([^,]+)/gx;# WHY DIDNT I USE SPLIT!!!!!
 	@parts = split(',',$line);
     }
     chomp(@parts);
@@ -567,6 +534,7 @@ foreach $line (@ontology_csv) {
 		# value matching our ontology.
 		###
 		if(0){
+
 		for(my $ct_i=0;$ct_i<=$#color_table_lines;$ct_i++) { 
 		    my $cte=$color_table_lines[$ct_i];
 		    #print($cte);
@@ -799,7 +767,7 @@ if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq
 #close SESAME_OUT; 
 
 # when you are sure this is working add... 
-# rename $outpath, $ontology_inpath;  # destroys ontology_inpath, change name of file f
+# rename $outpath, $p_ontology_in;  # destroys p_ontology_in, change name of file f
 
 #    $cmd = "copy $ARGV[0] $ARGV[0].bak";
 #    system($cmd);
