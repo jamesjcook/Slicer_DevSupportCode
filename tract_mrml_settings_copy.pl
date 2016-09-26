@@ -218,7 +218,8 @@ for my $src_attr ( @src_attribs) {
 	$attr_val{$src_attr}=$src_node->{$src_attr};
 	my @dest_nodes =();
 	if ( 1 ) { 
-	    @dest_nodes=mrml_find_by_id($xml_data,$mrml_type,$mrml_type);
+	    #@dest_nodes=mrml_find_by_id($xml_data,$mrml_type,$mrml_type);
+	    @dest_nodes=mrml_find_by_type($xml_data,$mrml_type);
 	} else {
 	    
 	    if ( defined $xml_data->{"MRML"}->{$mrml_type}) {
