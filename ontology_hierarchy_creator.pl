@@ -398,7 +398,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	$processed_nodes++;
 	#dump($c_entry);
     }
-
+    if ( 0) {
     my @c_vals=qw(c_R c_G c_B c_A Value);
     #my $o_entry=$o_table;
     #foreach (@c_vals){
@@ -406,8 +406,9 @@ foreach my $mrml_model (@mrml_nodes) {
 	#$o_entry->{"$_"}=$c_entry->{"$_"};
     #}
     # set the o_entry color info to the c_table info.
-    $o_entry->{@c_vals}=$c_entry->{@c_vals};
-    
+    #$o_entry->{@c_vals}=$c_entry->{@c_vals};
+    @{$o_entry}{@c_vals}=@{$c_entry}{@c_vals};
+    }
        
     my $alt_name=$n_a{"Name"};
     #my $Abbrev=$n_a{"Abbrev"};
@@ -711,14 +712,23 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
 	    $h_entry->{"Value"}=0;
 	    print("Extranous ontology entry($h_entry->{Structure})!\n");
 	    #sleep_with_countdown(2);
+	} else {
+	    my @c_vals=qw(c_R c_G c_B c_A Value);
+	    # set the o_entry color info to the c_table info.
+	    #dump(@{$c_entry}{@c_vals});
+	    @{$h_entry}{@c_vals}=@{$c_entry}{@c_vals};
 	}
+
+	
 	my $line;
 	if ( 1 ) {
 	    my @values=@{$h_entry}{@fields};
+	    # trim the organizational numbef off the names of levels
 	    my $start_field=2;
 	    for (my $vn=$start_field;$vn<$start_field+4;$vn++){
 		$values[$vn]=~s/^[0-9]+_//gx;
 	    }
+	    # make the output line
 	    $line=join("\t",@values)."\n";
 	} else {
 	    $line=sprintf("%i %s %i %i %i %i\n",$h_entry->{"Value"},
