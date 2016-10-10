@@ -74,7 +74,7 @@ my $model_prefix="Model_";
 $debug_val=25;
 my $p_mrml_out_template;
 if ( ! defined $p_mrml_in || ! defined $p_color_table_in || ! defined $p_ontology_in ) { 
-    print("specifiy at least:\n\t(-o ontology)\n\t(-m mrml)\n\t(-c color_table).\nOptionally specify\n\t(-o output mrml)\n\t(-t  rename type [Clean|Name|Structure|Abbrev])\n");
+    print("specifiy at least:\n\t(-h hierarchical_ontology)\n\t(-m mrml)\n\t(-c color_table).\nOptionally specify\n\t(-o output mrml)\n\t(-t  rename type [Clean|Name|Structure|Abbrev])\n");
     if ( ! defined $p_ontology_in  ) {
     	print ("ERROR: no ontology specified\n"); }
     if ( ! defined $p_mrml_in ) {
