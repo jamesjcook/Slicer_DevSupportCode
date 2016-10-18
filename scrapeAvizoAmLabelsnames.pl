@@ -12,10 +12,10 @@ my $opacity=1;
 
 
 open my $file_h, '<', $inpath;
-
+warn("THIS CODE HAS NOT BEEN TESTED CORRECT, DO NOT TRY TO USE IN PRODUCTION\n");
 if ($file_h != -1) 
 { 
-    open my $out_file_h, '>', $outpath; 
+    open my $out_file_h, '>', $outpath or die "Could not open output $outpath, did you forget to specify?"; 
 #  #
     print $out_file_h "#\n";
 #  #Begin table data:
@@ -28,7 +28,10 @@ if ($file_h != -1)
     my $line='';
     my $section='';
     my $material='';
+    # pixval is read from the Id of the label in the segmentation editor. Duplicate Id's have been seen. This indicates pixval might not be accurate. SO previous was going to be an attempt at fixing that possible issue. IT IS NOT DONE!.
+    #  Explaination per JeffB (ages ago) There's a "value" attribute which one might assume represents voxel index values, but one would would be cruelly deceived.
     my $pixval=0;
+    #my $pixval_prev=-1; 
     my @color=(0,0,0);
     my $materials_flag=0;
     while ( $line !~ /^(# Data section follows).*$/ ) {
@@ -68,7 +71,7 @@ if ($file_h != -1)
 	} elsif ($line =~ /\s*Id\s([0-9]+),/ ) {
 	    $pixval=$1;
 	    #print("pixval=$pixval\n");
-	} elsif ($line =~ /\s*Color\s($float_rx)\s($float_rx)\s($float_rx)\s/ ) {
+	} elsif ($line =~ /\s*Color\s($float_rx)\s($float_rx)\s($float_rx)[\s,]/ ) {
 	    $color[0]=int(($1*255)+0.5);
 	    $color[1]=int(($2*255)+0.5);
 	    $color[2]=int(($3*255)+0.5);
@@ -78,7 +81,8 @@ if ($file_h != -1)
 		$o=0;
 	    }
 	    my $out_line=$pixval.' '.$section.' '.$color[0].' '.$color[1].' '.$color[2]." ".$o."\n";
-	    print  $out_file_h $out_line;  # write out every line modified or not 
+	    #print  $out_file_h $out_line;  # write out every line modified or not
+	    #print $out_line;  # write out every line modified or not 
 	}
 	if ( $materials_flag ){
 	    #print ( "$indent$section\n");
