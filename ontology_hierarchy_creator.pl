@@ -23,6 +23,8 @@ use Data::Dump qw(dump);
 use Clone qw(clone);
 use Getopt::Std;# qw(getopts);
 use File::Basename;
+#use String::Util qw(trim); $branch_name=trim($branch_name)
+use Text::Trim qw(trim);
 
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
@@ -98,9 +100,9 @@ my $p_color_table_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 
 ($Tp,$Tn,$Te)=fileparts($p_ontology_in,2);
 my $p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
-print "Table $p_mrml_in $p_mrml_out\n";
-print "Table $p_color_table_in $p_color_table_out\n";
-print "Table $p_ontology_in $p_ontology_out\n";
+print "MRML = $p_mrml_in -> $p_mrml_out\n";
+print "Color = $p_color_table_in -> $p_color_table_out\n";
+print "Hierarchy = $p_ontology_in -> $p_ontology_out\n";
 #exit;
 ###
 # color_table parse.
@@ -127,32 +129,66 @@ $header->{"c_A"}=5;
 my $splitter={};#
 # a aplitter to split a field into alternat parts. 
 #	my ($c_Abbrev,$c_name)= $tt_entry[1] =~/^_?(.+?)(?:___?(.*))$/;
+
+
 ### This splitter Regex is for the alex badea style color tables.
+# need a new/different one for anything else.
 $splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
 $splitter->{"Input"}=[qw(Name Structure)];# reformulate this var, keeping original in other
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
+### This splitter Regex is for plain comma separated lists.
+
+#### EXAMPLE OF FIRST LETTER OF EACH STR
+###perl -wMstrict -le
+###my $str = 'eternal corruption defilement';
+###$str =~ s{ \b ([[:alpha:]]) [[:lower:]]* \s* }{\U$1}xmsg;
+###print qq{'$str'};
+#$splitter->{"Regex"}='s{ \b ([[:alpha:]])_?[[:lower:]]* \s* }{$1}xmsg';# taking this regex
+#$splitter->{"Regex"}='^((.+))$';# taking this regex, alternate for take all  $splitter->{"Regex"}='^.*$';
+#$splitter->{"Input"}=[qw(Structure Name)];# reformulate this var, keeping original in other
+#$splitter->{"Output"}=[qw(Name Abbrev )];  # generating these two
+
+#1 Cingulate_Cortex_Area_24a 255 0 0 255
+
+
 $header->{"Splitter"}=$splitter;
 $header->{"LineFormat"}='^#.*';
 $header->{"Separator"}=" ";
 
+
 my $c_table=text_sheet_utils::loader($p_color_table_in,$header);
 #dump($c_table);
 
+### BIG PILE OF DEBUG PRINTS CONTROLELD BY THIS TRIPLICATE VARIABLE, TURN ANY ON TO DUMP SPECIFIED CONTENTS AND STOP.
+my ($d_abr,$d_nam,$d_str)=(0,0,0);
 my $Tr;
-#p$Tr=$c_table->{"Abbrev"};
-#dump($Tr);
-#$Tr=$c_table->{"Name"};
-#dump($Tr);
-#$Tr=$c_table->{"Structure"};
-#dump($Tr);
-#$Tr=$c_table->{"t_line"};
-#printf("%i\n",scalar(keys %{$c_table->{"t_line"}}));
-#printf("%i\n",scalar(keys %$c_table));
-#exit;
+if ($d_abr){
+    print STDERR ("Dump color:abbrev\n");
+    $Tr=$c_table->{"Abbrev"};
+    dump($Tr);
+}
+if ($d_nam){
+    print STDERR ("Dump color:name\n");
+    $Tr=$c_table->{"Name"};
+    dump($Tr);
+}
+if ($d_str){
+    print STDERR ("Dump color:structure\n");
+    $Tr=$c_table->{"Structure"};
+    dump($Tr);
+}
+if ($d_abr||$d_nam||$d_str){
+    $Tr=$c_table->{"t_line"};
+    printf("%i\n",scalar(keys %{$c_table->{"t_line"}}));
+    printf("%i\n",scalar(keys %$c_table));
+}
+	#exit;
 #my $parser=xml_read($p_mrml_in);
 #my $mrml_data=xml_read($p_mrml_in);
-#print("THE END\n");exit;
+    #print("THE END\n");exit;
+if  ($d_abr||$d_nam||$d_str){
+    exit;}
 
 my ($mrml_data,$xml_parser)=xml_read($p_mrml_in,'giveparser');
 
@@ -173,13 +209,31 @@ if(0){
 $splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
 $splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
+
+
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
+#### EXAMPLE OF FIRST LETTER OF EACH STR
+###perl -wMstrict -le
+###my $str = 'eternal corruption defilement';
+###$str =~ s{ \b ([[:alpha:]]) [[:lower:]]* \s* }{\U$1}xmsg;
+###print qq{'$str'};
+###$splitter->{"Regex"}='s{ \b ([[:alpha:]])_?[[:lower:]]* \s* }{$1}xmsg';# taking this regex
+#$splitter->{"Regex"}='^((.+))$';# taking this regex    $splitter->{"Regex"}='^.*$';# taking this regex
+#$splitter->{"Input"}=[qw(Structure Name)];# reformulate this var, keeping original in other
+#$splitter->{"Output"}=[qw(Name Abbrev )];  # generating these two
 
 my $h_info={};
 $h_info->{"Splitter"}=$splitter;
 $header->{"LineFormat"}='^#.*';
 #$header->{"Separator"}=" ";# for the ontology, we let it auto find the separator in the loader.
 my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
+#dump( $o_table);
+#exit;
+
+
+my $ontology=cleanup_ontology_levels($o_table);
+
+
 
 ####
 # New method, we have our text spreadsheets loaded.
@@ -215,18 +269,49 @@ if ($o_count!=$c_count) {
 }
 print("\n\n");
 
-my $rootHierarchyNodeID="vtkMRMLModelHierarchyNode1";#vtkMRMLHierarchyNode1"
+my $rootHierarchyNodeID="vtkMRMLModelHierarchyNode";#vtkMRMLModelHierarchyNode1 #vtkMRMLHierarchyNode1"
 my $rootHierarchyNode={};
-my @vtkMRMLHierarchyNodes=mrml_attr_search($mrml_data,"id",$rootHierarchyNodeID."\$","ModelHierarchy");
-# I think this'll find two nodes, One ModelHierarchy directly attahced to the MRML section of the hash,
-# and another directly attached to SceneView, which is attached to MRML. As far as i can tell these are the same.
-# There is just an inherrent inefficiency in the way slicer stores its information.
-#$mrml_node->{"name"}
-if (  $#vtkMRMLHierarchyNodes>=0 ) {#there is at least one node.
-    $rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
-    print("Found ".scalar @vtkMRMLHierarchyNodes." Hierarchy root(s).\n");
+if ( 1 ) {
+    # The other code was set aside beacause we cant rely on it being the first node.
+    # so, we'll get the first node, if that node has a parentNodeRef, we'll follow it until we find a node without a parent.
+    my @vtkMRMLHierarchyNodes=mrml_attr_search($mrml_data,"id",$rootHierarchyNodeID,"ModelHierarchy");
+    # I think this'll find two nodes, One ModelHierarchy directly attahced to the MRML section of the hash,
+    # and another directly attached to SceneView, which is attached to MRML. As far as i can tell these are the same.
+    # There is just an inherrent inefficiency in the way slicer stores its information.
+    if (  $#vtkMRMLHierarchyNodes<0 ) {#there is at least one node.
+	die("No root MRML nodes!!!!");
+    }
+
+    my $rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
+    # while the current root has a parent, its not really the root... so we should get its parent.
+    while (exists ($rootHierarchyNode->{"parentNodeRef"}) ) { 
+	my @parent_candidates=mrml_find_by_id($mrml_data,$rootHierarchyNode->{"parentNodeRef"}); # could i just scalar that for how i'm doing things?
+	$rootHierarchyNode=$parent_candidates[0];
+    }
+    if ( ! defined $rootHierarchyNode->{"id"} ) {
+	dump(@vtkMRMLHierarchyNodes);die("Couldnt find node");
+    } else {
+	print("root is ".$rootHierarchyNode->{"id"}."\n");
+	#exit;
+    }
+    $rootHierarchyNodeID=$rootHierarchyNode->{"id"};
+    #$rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
+    #print("Found ".scalar @vtkMRMLHierarchyNodes." Hierarchy root(s).\n");
+    
 } else {
-    die("No root nodes!!!!");
+
+    $rootHierarchyNodeID="vtkMRMLModelHierarchyNode1";
+    my @vtkMRMLHierarchyNodes=mrml_attr_search($mrml_data,"id",$rootHierarchyNodeID."\$","ModelHierarchy");
+    # I think this'll find two nodes, One ModelHierarchy directly attahced to the MRML section of the hash,
+    # and another directly attached to SceneView, which is attached to MRML. As far as i can tell these are the same.
+    # There is just an inherrent inefficiency in the way slicer stores its information.
+    #$mrml_node->{"name"}
+    if (  $#vtkMRMLHierarchyNodes>=0 ) {#there is at least one node.
+	$rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
+	print("Found ".scalar @vtkMRMLHierarchyNodes." Hierarchy root(s).\n");
+    } else {
+	die("No root MRML nodes!!!!");
+    }
 }
 #my $mrml_data=mrml_find_by_name($mrml_data->{"MRML"},"whiteSPCmatter","ModelHierarchy");
 #my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter","ModelHierarchy");
@@ -246,11 +331,15 @@ print("\tModel's:".(scalar(@mrml_nodes))."\n");
 # set up the name splitter for the slicer model output names
 ###
 # grouping of the regex is what determines the output. Output MUST be specified in the order splitte->{'Regex'} will return.
-$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# taking this regex
+$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
+#$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
+#$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.*?)(?:___?(.+))?)$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
 $splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
 $splitter->{"Output"}=[qw(Value Structure Abbrev Name)];  # generating these four
 
+
+#exit;
 ###
 #foreach model in mrml_data
 ###
@@ -264,11 +353,13 @@ foreach my $mrml_model (@mrml_nodes) {
     # Names come from color_tables, so the names should follow a regular pattern here + the added slicer model gen bits.
     my %n_a; # a holder for the multiple lookup possibilities for each model. This is a multiple level hash cross ref of the names and all the values. 
     # model names are split into the component parts, given the splitter defined above.
-    # the default splitter used for alex's labels shows lookup potentials of value, structure_full_avizo_name, Abbrev, Name.
+    # the default splitter used for paxinos/alex(RBSC)'s labels shows lookup potentials of value, structure_full_avizo_name, Abbrev, Name.
     # ex. modelname Model_1_ABC__A_big_name_completely  becomes
     # value=1, structure_full_avizo_name=ABC__A_big_name_completely, Abbrev=ABC, Name=A_big_name_completely.
+
+
     my $mrml_name=$mrml_model->{"name"};
-    my @field_keys=@{$splitter->{"Output"}};# get the count ofexpected elementes
+    my @field_keys=@{$splitter->{"Output"}};# get the count of expected elementes
     my @field_temp = $mrml_name  =~ /$splitter->{"Regex"}/x;
     my $msg="";
     if ( scalar(@field_keys) != scalar(@field_temp) ) {
@@ -286,6 +377,12 @@ foreach my $mrml_model (@mrml_nodes) {
 	next;
     }
 
+    #### NEED TO ENSURE THE n_a HASH IS CORRECT HERE.
+    #
+    # For poorly formed entries we can have unfilled or missing fields!
+    # 
+    
+    
     ### 
     # get the color_table info by abbrev, or value, or Name
     ###
@@ -307,7 +404,11 @@ foreach my $mrml_model (@mrml_nodes) {
 	push(@missing_model_messages,"No color table entry".$mrml_name);
 	dump(%n_a);
     }
+    ### 
     # get the ontology_table info by abbrev, or value, or Name
+    ###
+    # we sort throught the possible standard places it could be.
+    # adding second chance via color lookup.
     my @o_test=qw(Abbrev Name Structure);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
     do {
 	$tx=shift(@o_test) ;
@@ -353,6 +454,9 @@ foreach my $mrml_model (@mrml_nodes) {
 	    }
 	}
     }
+    #
+    # if we failed to find one of the entries, dump the info here.
+    #
     if ( not defined($o_entry) || not defined ($c_entry) ) {
 	warn("Model $mrml_name missing ontology or color entries");
 	if ( scalar(keys(%$c_entry)) > 2) {
@@ -398,7 +502,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	$processed_nodes++;
 	#dump($c_entry);
     }
-    if ( 0) {
+    if ( 0) {#DISABLEDCURRENTLY
     my @c_vals=qw(c_R c_G c_B c_A Value);
     #my $o_entry=$o_table;
     #foreach (@c_vals){
@@ -408,19 +512,25 @@ foreach my $mrml_model (@mrml_nodes) {
     # set the o_entry color info to the c_table info.
     #$o_entry->{@c_vals}=$c_entry->{@c_vals};
     @{$o_entry}{@c_vals}=@{$c_entry}{@c_vals};
-    }
+    } #DISABLEDCURRENTLY
        
     my $alt_name=$n_a{"Name"};
     #my $Abbrev=$n_a{"Abbrev"};
     my $Abbrev=$c_entry->{"Abbrev"};
     my $value=$c_entry->{"Value"};
+    if (! defined ($alt_name) ) {
+	$alt_name=$Abbrev;
+	$n_a{"Name"}=$Abbrev;
+    }
+    #printf("n=%s,ab=%s,v=%i\n",$alt_name,$Abbrev,$value);
+    #next;#ondebuging, just goto next
     
     #  while level_next exists, check for level, add it
     # grep {/Level_[0-9]+$/} keys %$o_entry;
     #dump($o_entry);
     print("Fetching levels for $alt_name") if $debug_val>=45;
-    my @parts=sort(keys %$o_entry);
-    @parts=grep {/Level_[0-9]+$/} @parts;
+    my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
+    @parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
     if (scalar(@parts)>0 ) {
 	print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
 	#dump(%$o_entry); # this works.
@@ -430,7 +540,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	#dump($o_entry->{@parts});# this is undef
 	#dump(@$o_entry->{@parts});# not an array reference
 	#dump(@$o_entry{@parts});# THIS WORKS!
-	@parts=@{$o_entry}{@parts}; # using most protected form.
+	@parts=@{$o_entry}{@parts}; # Now get the values at each present level. 
     } else {
 	@parts=();
     }
@@ -440,7 +550,23 @@ foreach my $mrml_model (@mrml_nodes) {
     my $s_path='Static_Render/LabelModels';
     my $ref=\%onto_hash;
     my $parent_ref=$rootHierarchyNode;
-    my @vtkMRMLModelDisplayNodes=mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
+    my @vtkMRMLModelDisplayNodes;
+    print("Getting ready to processnode $alt_name\n");
+    #print("dumping right now just forstesting\n");dump ($parent_ref); exit;
+    #mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
+    if ( defined ($parent_ref->{"displayNodeID"} ) ) {
+	@vtkMRMLModelDisplayNodes=mrml_attr_search( $mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
+    } else {
+	# if we dont have a parent node, then just get the first one, hope its the right thing.
+	#push(@vtkMRMLModelDisplayNodes,$mrml_data->{"MRML"}->{"ModelDisplay"}->[0]);
+	@vtkMRMLModelDisplayNodes=mrml_find_by_id($mrml_data,$mrml_nodes[0]->{"displayNodeRef"}."\$"); # the display node ref); # could i just scalar that for how i'm doing things?
+	if ( scalar(@vtkMRMLModelDisplayNodes) == 0  ){
+	    die "Parent ref problem";
+	} else {
+	    #dump (@vtkMRMLModelDisplayNodes);
+	    #exit;
+	}
+    }
     my $model_display_template = \%{clone $vtkMRMLModelDisplayNodes[0]};
     my $parent_hierarchy_node_id=$rootHierarchyNodeID;
     my $hierarchy_template = \%{clone $parent_ref};
@@ -448,29 +574,38 @@ foreach my $mrml_model (@mrml_nodes) {
     #sleep_with_countdown(3);
     my $sort_val=$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}; # current count of modelhierarchy nodes
     $hierarchy_template->{"sortingValue"}=$sort_val;
+    my $level_show_bool=0; # bool to show what levels we've got when this loop ends. This is used to show error messages. 
     for(my $pn=0;$pn<=$#parts;$pn++){# proces the different levels of ontology, get the different ontology names, create a path to save the structure into.
 	#
 	my $branch_name=$parts[$pn];#meta structure name
-	#use String::Util qw(trim); $branch_name=trim($branch_name)
-	use Text::Trim qw(trim);
-		trim($branch_name);
+		#use String::Util qw(trim); $branch_name=trim($branch_name)
+	use Text::Trim qw(trim);# this doesnt work to limit the use of the Text::Trim module. Might as well be at the top of the script. 
+	trim($branch_name);		
+	my $tnum="";
+	($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
+	$tnum="" unless defined $tnum;
+	#universally trash tnum.
+	$tnum="";
+
 	#print("bn $branch_name\n");
 	if ( ( 0 )
+	     # THIS IS NOT DEACTIVATING THIS CODE, THIS IS FOR READABILITY LINEING THE CONDITIONS UP ON SUBSEQUENT LINES.
 	     || ( not defined $branch_name ) 
 	     || ( $branch_name eq '' ) 
 	     || ( $branch_name =~ /^\s*$/ )
 	     || ( $branch_name eq '0' ) 
-		    ) {
+	    ) {
 	    #|| ( $branch_name == 0 ) ) {
 	    
-	    warn("bad tree name($branch_name), skipping to additional levels");
+	    #warn("bad tree name($branch_name), skipping to additional levels");
 	    #sleep_with_countdown(20);
+	    $level_show_bool=1;
 	    next; 
 	    warn("bad tree name($branch_name), bailing on additional levels");
 	    #sleep_with_countdown(20);
 	    last; # drop out of the hierarchy builder
 	}
-
+	if ( 0 ) {
 	if ( ( $branch_name =~ /_to_/x )
 	     || ($branch_name =~/_and_/x) ){
 	    warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
@@ -487,16 +622,12 @@ foreach my $mrml_model (@mrml_nodes) {
 	    print("branch: $branch_name ");
 	    dump(@b_parts);
 	    $branch_name=$b_parts[0];
-	}
-	if ( $branch_name =~ /^[rmp][0-9]{1,2}(?:[^\w]+[\w]*)?$/x) {
+	} }
+	if  ( 0 
+	    && $branch_name =~ /^[rmp][0-9]{1,2}(?:[^\w]+[\w]*)?$/x) {
 	    warn("\tAlex said to skip these structures($branch_name)");
 	    next;
 	}
-
-	
-	my $tnum="";
-	($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
-	$tnum="" unless defined $tnum;
 	
 	#$branch_name=~ s/[,\/#]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
 	$branch_name=~ s/[,\/# ]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
@@ -550,6 +681,10 @@ foreach my $mrml_model (@mrml_nodes) {
 	$parent_hierarchy_node_id=$tnum.$branch_name;
 	#print("."x$pn);
 	#print("\n");
+    }
+    if ( $level_show_bool ) {
+	# Some levels haed issues here they all are.
+	warn("bad tree name in group ( ".join(@parts," ")." ), skipping to additional levels");
     }
     my $node=$mrml_model;
     #display_complex_data_structure($node);
@@ -620,7 +755,7 @@ foreach my $mrml_model (@mrml_nodes) {
 		rename($file_src, $file_dest);
 	    }
 	} else {
-	    print ("\t #missing $file_src\n");
+	    print ("\t #missing $file_src\n") if ($debug_val>=30);
 	}
     } else {
 	#rename($file_dest,$file_src);
@@ -658,7 +793,7 @@ mrml_to_file($mrml_data,'  ',0,'pretty','',$p_mrml_out);
 # get value, name|abbrev|structure(whichever we've requeseted) c_r, c_g, c_b, c_a
 printf("Dumping new color_table to $p_color_table_out\n");
 my @color_table_out=();
-my @fields=("Value", $rename_type,qw( c_R c_G c_B c_A));
+my @fields=("Value", $rename_type,qw( c_R c_G c_B c_A));# this is a constant orde,r so this is ok, our ontology is not.
 my $test_line=0; # counter to help put lines back out in order.
 my $max_failures=200;
 while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) ) 
@@ -694,7 +829,15 @@ while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) )
 write_array_to_file($p_color_table_out,\@color_table_out);
 my @ontology_out=();
 #my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
-@fields=qw(Structure Abbrev Level_1 Level_2 Level_3 Level_4 Value c_R c_G c_B c_A);
+#@fields=qw(Structure Abbrev Level_1 Level_2 Level_3 Level_4 Value c_R c_G c_B c_A);# this was fine for the colortable as it had no header, but we can do better here.
+@fields=();
+#dump(%{$o_table->{"Header"}});#exit;
+# this is the hash converstion code lets use it to build an inverse hash.. 
+my %h_o_hash;@h_o_hash{values(%{$o_table->{"Header"}})}=keys(%{$o_table->{"Header"}});#dump(%h_o_hash);#exit;
+foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERCAL OR THIS WOULDNT WORK AS EXPECTED.
+    push(@fields,$h_o_hash{$idx});
+}
+#dump(@fields);exit;
 push(@ontology_out,join("\t",@fields)."\n");
 $test_line=0;
 printf("Dumping new ontology to $p_ontology_out\n");
@@ -1017,7 +1160,7 @@ foreach $line (@ontology_csv) {
 		if ( ! -d $s_path ){
 		    print("mkdir $s_path\n") if ($debug_val>=45);
 		    if ( $do_unsafe) {
-		    mkdir ($s_path);
+		    mkdir ($s_path);# oh yea, we can make_path instead...
 		    }
 		}
 
@@ -1338,3 +1481,304 @@ if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq
 #    $cmd = "copy $ARGV[0] $ARGV[0].bak";
 #    system($cmd);
 #    $outpath=$ARGV[0].bak;
+
+
+
+sub cleanup_ontology_levels {
+    # This is a cleanup function, to make sure bad ontology data doesnt pollute what we're doing later on.
+    # it needst o take the onotology hash table, and turn it into a hierarchical structure.
+    #
+    # Plan is to do this in two passes. First pass operates on each line of ontology; 
+    # it ensures unique structure names/abbreviations/value, and adds levels to a listing of seen super structures.
+    # The second pass goes through the seen super structures and tries to find their parent structure.
+    my ($o_table)=@_;
+    my $onto_hash={}; #$onto_hash->{"test"}="foo";
+    # onto_hash will have 4 parts.
+    # onto SuperStructures, branches with many leaves, by their line number
+    # onto num_lookup, the superstructures with their ordering number if they've got one. Only the first number found will be used for any group.
+    # onto line_to_struct, lookup of linenumber and to SuperStructure
+    # onto branches, once we have the other two components we'll try to back calculate the ontology lookup.
+    
+    my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
+    #dump(@o_columns); #dump($o_table->{$o_columns[0]}); # a worse version of the commented test.
+    #dump($o_table->{"t_line"}); # test that we have contents by line in our table.
+    my $seen={};
+    $seen->{"Value"}={};
+    $seen->{"Structure"}={};
+    $seen->{"Abbrev"}={};
+    $seen->{"Name"}={};
+    my @onto_errors=();
+    my @onto_error_msgs=();
+    foreach (keys( %{$o_table->{"t_line"}}) ) {
+    	#dump($_);
+	#dump(ref $_);
+	my $o_entry=$o_table->{"t_line"}->{$_};
+	# TODO: get the keys, make sure they are all part of the ontology header.
+	#%{$o_table->{'Header'}}; 
+	#dump($o_entry);
+	#dump(ref $o_entry);
+
+	#
+	# error check our o_entry ( duplicates ).
+	#
+	my @error_fields=();
+	for my $check_field (keys(%$seen)) {
+	    if ( ! exists($seen->{$check_field}->{$o_entry->{$check_field}})  ){
+		push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$_);#$o_entry->{$check_field});
+		#$seen->{$check_field}->{$o_entry->{$check_field}} = ($o_entry->{$check_field});
+	    } else {
+		push(@onto_errors,$seen->{$check_field}->{$o_entry->{$check_field}});
+		push(@onto_error_msgs,"ERROR duplicate ontology $check_field line ".$o_entry->{"t_line"}.".");
+		push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$o_entry->{"t_line"});#$o_entry->{$check_field});
+		push(@error_fields,$check_field);
+	    }
+	}
+	if(scalar(@error_fields)==1) {# there's only one error for this entry,
+	    if ( $error_fields[0] eq "Abbrev" ) { # and its in the Abbreviation.
+		# Then we can fix this, note these two steps MUST be peformed in this order.
+		# First; 
+		# Get first t_line.
+		my $first_line=$seen->{"Abbrev"}->{$o_entry->{"Abbrev"}}[0];
+		# MIGHT want to do the minimum t_line instead of just the first one found, what with hashes not having guarnteed order and all. 
+		#dump($first_line);
+		my $first_entry=$o_table->{"t_line"}->{$first_line};
+		# Fix the lookup table.
+		$o_table->{"Abbrev"}->{$first_entry->{"Abbrev"}}=$first_entry;
+		# Second;
+		# Fix our personal entry, set abbreviation to name. 
+		$o_entry->{"Abbrev"}=$o_entry->{"Name"};
+		push(@onto_error_msgs,"\t ".$o_entry->{"t_line"}." Fixed by dumping the abbreviation");
+	    }
+	}
+	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
+	#my @parts=@o_columns;
+	@parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+	if (scalar(@parts)>0 ) {
+	    print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
+	    #dump(%$o_entry); # this works.
+	    #dump(%{$o_entry{@parts}}); # his doesnt.
+	    #dump(%{$o_entry}); this works
+	    #dump(@{$o_entry}{@parts});# THIS WORKS!!!!
+	    #dump($o_entry->{@parts});# this is undef
+	    #dump(@$o_entry->{@parts});# not an array reference
+	    #dump(@$o_entry{@parts});# THIS WORKS!
+	    @parts=@{$o_entry}{@parts}; # Now get the values at each present level. 
+	} else {
+	    @parts=();
+	}
+	#
+	# Get ontology levels and assign structure to the different levels in the ultra meta hash.
+	#
+	my @onto_levels=();my $level_show_bool=0;
+	print($o_entry->{"Name"}."\t".$o_entry->{"t_line"}."\n");
+	for(my $pn=0;$pn<=$#parts;$pn++){
+	    # process the different levels of ontology, get the different ontology names.
+	    # clean them up and put them into the onto_levels list.
+	    my $branch_name=$parts[$pn]; # meta structure name
+	    trim($branch_name);
+	    my $tnum="";
+	    ($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
+	    $tnum="" unless defined $tnum;
+	    #universally trash tnum.
+	    #$tnum="";
+	    #$branch_name=~ s/[,\/#]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
+	    $branch_name=~ s/[,\/# ]/_and_/xg;#clean structure name of dirty elements replacing them with _and_.
+	    $branch_name=~ s/[-\/# ]/_to_/xg;#clean structure name of dirty elements replacing them with _to_.
+	    
+	    #print("bn $branch_name\n");
+	    if ( ( 0 )
+		 # THIS IS NOT DEACTIVATING THIS CODE, THIS IS FOR READABILITY LINEING THE CONDITIONS UP ON SUBSEQUENT LINES.
+		 || ( not defined $branch_name ) 
+		 || ( $branch_name eq '' ) 
+		 || ( $branch_name =~ /^\s*$/ )
+		 || ( $branch_name eq '0' ) 
+		) {
+		$level_show_bool=1;
+		warn("bad tree name, skipping to next level");
+		next; 
+	    }
+	    if ( ( $branch_name =~ /_to_/x )
+		 || ($branch_name =~/_and_/x) ){
+		#warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
+		### 
+		# @parts = $line =~ /([^\t]+)/gx;
+		###
+		#my @b_parts= $branch_name =~ /(.*?)((:?_to_|_and_)(.*))*/gx; # this was a failure : (
+		if ( ( $branch_name =~ /_to_/x )
+		     && ($branch_name =~/_and_/x) ) {
+		    die("WOW Really trying to get me arnt you!");
+		}
+		my @b_parts=split("_and_",$branch_name);
+		# foreach b_part convert _ to space, and then trim to clean up erroneous underscores.
+		my @tmp=();
+		# THIS ALL FEELS SO CLUNKY, THERE MUST BE A MORE PERLY, CLEAVER WAY
+		while ( my $b_and =shift(@b_parts)) {
+		    $_=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
+		    #if ( $b_and =~ /_to_/x ) {
+		    #    die("WOW Really trying to get me arnt you!");			
+		    #}
+		    #push(@tmp,trim($b_and));
+		    trim($b_and);
+		    $b_and=~ s/[ ]/_/xg;#clean structure name of dirty elements replacing them for underscores.
+		    my @b_endpoints=split("_to_",$b_and);
+
+		    # can we operate on all array elements at once. No we cant.
+		    if ( 0 ) {
+			#@b_endpoints=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
+			#trim(@b_endpoints);
+		    } else {
+			if ( scalar(@b_endpoints)>2 ) {
+			    die ("Bad range! more than two endpoints");
+			}
+			my @range=();
+			my $bname;
+			use Scalar::Util qw(looks_like_number);
+			for(my $be=0;$be<=$#b_endpoints;$be++){
+			    $b_endpoints[$be]=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
+			    trim($b_endpoints[$be]);
+			    #my ($base,$num) = $b_endpoints[$be] =~ /^(.*?)([0-9]+)$/x;
+			    my ($base,$num) = $b_endpoints[$be] =~ /^([^0-9]+)(.*)$/x;
+			    if ( looks_like_number($num) ) {
+				push(@range,$num);
+			    } else {
+				push(@range,-1);
+			    }
+			    if ( defined $base ) { $bname=$base;} else { die("range error");}
+			}
+			#dump(@b_endpoints);
+			#printf("$bname%i ",($range[0] .. $range[1]));
+			$bname=~s/[ ]/_/xg;
+			for(my $v=$range[0];$v<=$range[$#range];$v++){
+			    if ( $v>0 ){
+				push(@tmp,sprintf("%s%i",$bname,$v));
+			    } else {
+				push(@tmp,$bname);
+			    }
+			}
+		    }
+		}
+		#print("branch: $branch_name \n");
+		push(@onto_levels,@tmp);
+		# foreach onto_level add tnum to the tnum lookup
+		for my $ol (@tmp) {
+		    if ( ! exists($onto_hash->{"order_lookup"}->{$ol} ) ){
+			if( $tnum ne "" ) {
+			    $onto_hash->{"order_lookup"}->{$ol}=$tnum;
+			} else {
+			    $onto_hash->{"order_lookup"}->{$ol}="1_";
+			}
+		    }
+		}
+	    } else {
+		# foreach onto_level add tnum to the tnum lookup
+		push(@onto_levels,$branch_name);
+		if ( ! exists($onto_hash->{"order_lookup"}->{$branch_name} ) ){
+		    if( $tnum ne "" ) {
+			$onto_hash->{"order_lookup"}->{$branch_name}=$tnum;
+		    } else {
+			$onto_hash->{"order_lookup"}->{$branch_name}="1_";
+		    }
+		}
+	    }
+	    #my $tnum="";
+	    #($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
+	    #$tnum="" unless defined $tnum;
+	    if  ( 0 
+		  && $branch_name =~ /^[rmp][0-9]{1,2}(?:[^\w]+[\w]*)?$/x) {
+		warn("\tAlex said to skip these structures($branch_name)");
+		next;
+	    }
+	}
+	# HERE WE SHOULD BE ABLE TO SEE PARTS
+	#dump(@onto_levels);
+	use List::MoreUtils qw(uniq);
+	@onto_levels=uniq(@onto_levels);
+	printf("\t".join("\n\t",@onto_levels)."\n");
+	# onto_hash will have 4 parts.
+	# onto superstructures, branches with many leaves
+	# onto lines to superstructs, leaves with all possible branches.
+	foreach (@onto_levels){
+	    #print($o_entry->{"Name"}."\t".0."\n");
+	    push(@{$onto_hash->{"SuperStructures"}->{$_}},$o_entry->{"t_line"});
+	}
+	@{$onto_hash->{"line_to_struct"}->{$o_entry->{"t_line"}}}=@onto_levels;
+	# onto super_nums, the superstructures with their number if they've got one. Only the first number found will be use. 
+	# onto branches, once we have the other two components we'll try to back calculate the ontology lookup.
+    }
+    #dump($seen);
+    if( scalar(@onto_error_msgs) ) {
+	warn (join("\n",@onto_error_msgs));
+    }
+    #dump(@onto_errors);
+    #dump($onto_hash);
+
+    # NOW WE NEED TO RE_CREATE THE BRANCHES.
+    # What order of operations should we use here....
+    # foreach line,
+    #dump($onto_hash->{"line_to_struct"});
+    my $max_levels=1;
+    foreach (keys( %{$o_table->{"t_line"}}) ) {
+	my $o_entry=$o_table->{"t_line"}->{$_};
+	#    for each superstructure of the line,
+	my @super_structs=@{$onto_hash->{"line_to_struct"}->{$o_entry->{"t_line"}}};
+	#dump(@super_structs);
+	my $super_struct_hash;
+	for my $super (@super_structs) {
+	    if ( ! exists($onto_hash->{"SuperStructures"}->{$super} ) ) {
+		print("Missing $super\n");
+	    }
+	    #
+	    $super_struct_hash->{$super}=scalar(@{$onto_hash->{"SuperStructures"}->{$super}}); # this isnt right.
+	    #dump($onto_hash->{"SuperStructures"}->{$super});
+	}
+	#dump($super_struct_hash);
+	# sort keys by value, descending (use a,b for ascending, or b,a for descending).
+	#my %h; $h{"test2"}=1; $h{"test1"}=60; $h{"test3"}=30; 
+	#my @h_keys = sort { $h{$a} <=> $h{$b} } keys(%h);
+	#dump(keys(%h));
+	##("test1", "test3", "test2")
+	#dump(@h_keys);
+	##("test2", "test3", "test1")
+	@super_structs = sort { $super_struct_hash->{$b} <=> $super_struct_hash->{$a} } keys(%$super_struct_hash);
+	#dump(@super_structs);
+	# 
+	# use this info to bludgeon current ontology entry.
+	#
+	if($max_levels<scalar(@super_structs)){
+	    $max_levels=scalar(@super_structs);
+	}
+	for(my $ln=1;$ln<=scalar(@super_structs)||exists($o_entry->{sprintf("Level_%i",$ln+1)});$ln++){
+	    #if(exists($o_entry->{sprintf("Level_%i",$ln+1)}) ) {
+	    if ($ln>scalar(@super_structs)) {
+		delete $o_entry->{sprintf("Level_%i",$ln+1)};
+	    } else {
+		$o_entry->{sprintf("Level_%i",$ln)}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
+	    }
+	}
+
+    }
+    #    sort supers by their content count. Arrange largest to smallest, That is a good approximation of correct.
+    # MAYBE we should look deeper, but lets not bother at first.
+    #
+    # Re-write header of o_table.
+    #
+    my $ln=1;
+    while(exists($o_table->{'Header'}->{sprintf("Level_%i",$ln)}) ){
+	delete($o_table->{'Header'}->{sprintf("Level_%i",$ln)});
+	$ln++;
+    }
+    my $field_count=0;
+    my @sorted_order = sort { $o_table->{'Header'}->{$a} <=> $o_table->{'Header'}->{$b} } keys(%{$o_table->{'Header'}});
+    #dump(%{$o_table->{'Header'}});
+    $field_count=$#sorted_order;
+    @{$o_table->{'Header'}}{@sorted_order}=(0 .. $field_count);
+    #dump(%{$o_table->{'Header'}});
+    for($ln=1;$ln<=$max_levels;$ln++){
+	$o_table->{'Header'}->{sprintf("Level_%i",$ln)}=$ln+$field_count;
+    }
+    #dump(%{$o_table->{'Header'}});
+    #dump($o_table->{"Name"});
+
+    #exit;
+    return $onto_hash;
+}
