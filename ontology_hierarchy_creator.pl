@@ -524,34 +524,10 @@ foreach my $mrml_model (@mrml_nodes) {
     }
     #printf("n=%s,ab=%s,v=%i\n",$alt_name,$Abbrev,$value);
     #next;#ondebuging, just goto next
-    
-    #  while level_next exists, check for level, add it
-    # grep {/Level_[0-9]+$/} keys %$o_entry;
-    #dump($o_entry);
-    print("Fetching levels for $alt_name") if $debug_val>=45;
-    my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
-    @parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
-    if (scalar(@parts)>0 ) {
-	print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
-	#dump(%$o_entry); # this works.
-	#dump(%{$o_entry{@parts}}); # his doesnt.
-	#dump(%{$o_entry}); this works
-	#dump(@{$o_entry}{@parts});# THIS WORKS!!!!
-	#dump($o_entry->{@parts});# this is undef
-	#dump(@$o_entry->{@parts});# not an array reference
-	#dump(@$o_entry{@parts});# THIS WORKS!
-	@parts=@{$o_entry}{@parts}; # Now get the values at each present level. 
-    } else {
-	@parts=();
-    }
-    print("\t(\"".join("\", \"",@parts)."\")\n")  if $debug_val>=45;
-    #next;
     #  add wiring....?
     my $s_path='Static_Render/LabelModels';
-    my $ref=\%onto_hash;
     my $parent_ref=$rootHierarchyNode;
     my @vtkMRMLModelDisplayNodes;
-    print("Getting ready to processnode $alt_name\n");
     #print("dumping right now just forstesting\n");dump ($parent_ref); exit;
     #mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
     if ( defined ($parent_ref->{"displayNodeID"} ) ) {
@@ -574,6 +550,33 @@ foreach my $mrml_model (@mrml_nodes) {
     #sleep_with_countdown(3);
     my $sort_val=$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}; # current count of modelhierarchy nodes
     $hierarchy_template->{"sortingValue"}=$sort_val;
+
+
+    
+    #  while level_next exists, check for level, add it
+    # grep {/Level_[0-9]+$/} keys %$o_entry;
+    #dump($o_entry);
+    print("Getting ready to processnode $alt_name\n");
+    print("Fetching levels for $alt_name") if $debug_val>=45;
+    my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
+    @parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+    if (scalar(@parts)>0 ) {
+	print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
+	#dump(%$o_entry); # this works.
+	#dump(%{$o_entry{@parts}}); # his doesnt.
+	#dump(%{$o_entry}); this works
+	#dump(@{$o_entry}{@parts});# THIS WORKS!!!!
+	#dump($o_entry->{@parts});# this is undef
+	#dump(@$o_entry->{@parts});# not an array reference
+	#dump(@$o_entry{@parts});# THIS WORKS!
+	@parts=@{$o_entry}{@parts}; # Now get the values at each present level. 
+    } else {
+	@parts=();
+    }
+    print("\t(\"".join("\", \"",@parts)."\")\n")  if $debug_val>=45;
+    #next;
+
+    my $ref=\%onto_hash;    
     my $level_show_bool=0; # bool to show what levels we've got when this loop ends. This is used to show error messages. 
     for(my $pn=0;$pn<=$#parts;$pn++){# proces the different levels of ontology, get the different ontology names, create a path to save the structure into.
 	#
@@ -651,9 +654,18 @@ foreach my $mrml_model (@mrml_nodes) {
 	    $model_display_template->{"name"}=$branch_name."Display";
 	    $model_display_template->{"id"}=$tnum.$branch_name."Display";
 	    #$model_display_template->{"id"}="vtkMRMLModelDisplayNode".($hierarchy_template->{"sortingValue"}+1);
-	    $model_display_template->{"color"}=sprintf("%0.0f",rand(1))
-		." ".sprintf("%0.1f",rand(1))
-		." ".sprintf("%0.1f",rand(1));
+	    if ( 1 ) { #WHILE WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
+		#FIXME
+		#TODO
+		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
+							   ,120,120,120);
+	    } else {
+		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
+							   ,rand(1),rand(1),rand(1));
+		#$model_display_template->{"color"}=sprintf("%0.0f",rand(1))
+		#." ".sprintf("%0.1f",rand(1))
+		#." ".sprintf("%0.1f",rand(1));
+	    }
 	    $model_display_template->{"visibility"}="false";
 	    $hierarchy_template->{"name"}=$branch_name;
 	    $hierarchy_template->{"id"}=$tnum.$branch_name;
@@ -865,11 +877,38 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
 	
 	my $line;
 	if ( 1 ) {
+	    my @values;
+	    for (my $vn=0;$vn<=$#fields;$vn++){
+		my $val=$h_entry->{$fields[$vn]};
+		if (! defined($val) ) {
+		    $val="";
+		} elsif( my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ) {
+		    # IF we match this regex 
+		    if ( (  defined($onum ) && defined($name)) 
+			 &&(length($onum)>0 && length($name)>0) ) {
+			$val=$name;
+		    }
+		}
+		push(@values,$val);
+	    }
+	    $line=join("\t",@values)."\n";	    
+	} elsif ( 0 ) {
+		#THIS CODE IS POOP! REQUIRES 4 LEVELS :p
 	    my @values=@{$h_entry}{@fields};
 	    # trim the organizational numbef off the names of levels
 	    my $start_field=2;
 	    for (my $vn=$start_field;$vn<$start_field+4;$vn++){
-		$values[$vn]=~s/^[0-9]+_//gx;
+		my $vx=$values[$vn];
+		if( defined($vx) ){
+		    my ($onum,$name)=$vx=~/^([0-9]+_)?(.*)$/x;
+		    if (defined ($name ) ) {
+			$values[$vn]=$name;
+		    } elsif (defined ($onum ) ) {
+			$values[$vn]=$onum;
+		    }
+		} else {
+		    $values[$vn]=0;
+		}
 	    }
 	    # make the output line
 	    $line=join("\t",@values)."\n";
@@ -1577,7 +1616,7 @@ sub cleanup_ontology_levels {
 	    my $branch_name=$parts[$pn]; # meta structure name
 	    trim($branch_name);
 	    my $tnum="";
-	    ($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
+	    ($tnum,$branch_name)= $branch_name =~/^([0-9]+_)?(.*)$/;
 	    $tnum="" unless defined $tnum;
 	    #universally trash tnum.
 	    #$tnum="";
@@ -1670,6 +1709,9 @@ sub cleanup_ontology_levels {
 		    }
 		}
 	    } else {
+		if ($o_entry->{"t_line"}==51 ){
+		    print($o_entry->{"Name"}.": tnum=$tnum,branch_name=$branch_name\n");
+		}
 		# foreach onto_level add tnum to the tnum lookup
 		push(@onto_levels,$branch_name);
 		if ( ! exists($onto_hash->{"order_lookup"}->{$branch_name} ) ){
@@ -1677,6 +1719,12 @@ sub cleanup_ontology_levels {
 			$onto_hash->{"order_lookup"}->{$branch_name}=$tnum;
 		    } else {
 			$onto_hash->{"order_lookup"}->{$branch_name}="1_";
+		    }
+		} else {
+		    my $a_tnum=$onto_hash->{"order_lookup"}->{$branch_name};
+		    if ($a_tnum ne $tnum && $debug_val>=45) {
+			print("AttemptedLevelOverride!".$o_entry->{"Name"}.
+			      ": branch_name=$branch_name tnum=\"$a_tnum\" is not \"$tnum\"\n");
 		    }
 		}
 	    }
@@ -1716,22 +1764,125 @@ sub cleanup_ontology_levels {
     # What order of operations should we use here....
     # foreach line,
     #dump($onto_hash->{"line_to_struct"});
+    #    sort supers by their content count. Arrange largest to smallest, That is a good approximation of correct.
+    # MAYBE we should look deeper, but lets not bother at first.
+
+    #
+    # construct the super structure hash of superstructure=>leaf_count
+    #
+    my $super_struct_hash;
+    my @super_structs=keys(%{$onto_hash->{"SuperStructures"}});
+    for my $super (@super_structs) {
+	if ( ! exists($onto_hash->{"SuperStructures"}->{$super} ) ) {
+	    print("Missing $super\n");
+	}
+	$super_struct_hash->{$super}=scalar(@{$onto_hash->{"SuperStructures"}->{$super}}); # this isnt right.
+    }
+    #
+    # sort keys of super hash descending.
+    #
+    @super_structs = sort { $super_struct_hash->{$b} <=> $super_struct_hash->{$a} } keys(%$super_struct_hash);
+    my @potential_parents=();
+
+    #
+    # For every "branch" assume its a twig, and find potential parents.
+    #
+    # Potential parents must have more entries to them. SO, since we're sorted, 
+    # we can safely assume previous "twigs" are potetntial parents, and then evaluate from there.
+    # 
+    # This should allow us to check each previous one in turn, adding to the ontology in pieces.
+    # Even furhter, we should check previous parents in reverse as we want the smallest match possible.
+    $onto_hash->{"Hierarchy"}={};
+    while(my $twig=shift(@super_structs) ){
+	$onto_hash->{"Branches"}->{$twig}={};
+	#dump(@potential_parents);
+	foreach my $pp (reverse(@potential_parents)) {
+	    #reverse to let us check the next biggest parent.
+	    # get parent element count
+	    my $p_c=$super_struct_hash->{$pp};
+	    if ($p_c>$super_struct_hash->{$twig} ){
+	    # if elementcount of child < elementcount of parent
+		#   get parent elements
+		my @p_e=@{$onto_hash->{"SuperStructures"}->{$pp}};
+		#   join parents into sorted string
+		my $par_leaves=join("_",sort(@p_e));
+		#   get child elements
+		my @t_e=@{$onto_hash->{"SuperStructures"}->{$twig}};
+		#   join children into regex
+		my $child_reg=join("(_.*_)|(_)",sort(@t_e));
+		# check if we're the same category of structure eg,  m, p, r
+		my ($pname,$pnum)=$pp=~ /^([^0-9]+)(.*)$/x ;
+		my ($tname,$tnum)=$twig=~ /^([^0-9]+)(.*)$/x ;
+		if ( $tname eq $pname ) {
+		    next;
+		}
+		#   do our compare.
+		if ( $par_leaves=~/$child_reg/x ){
+		    print("Best parent of $twig is $pp\n") if ($debug_val>=45);
+		    # add to hash....
+		    #if ( ! exists($onto_hash->{"Twigs"}->{$pp}) && exists($onto_hash->{"Branches"}->{$pp}) ) {
+		    #$onto_hash->{"Hierarchy"}=$onto_hash->{"Branches"}->{$pp};
+		    #}
+		    if (    ! exists($onto_hash->{"Twigs"}->{$pp}) 
+			 && ! exists($onto_hash->{"Hierarchy"}->{$pp})
+			 &&   exists($onto_hash->{"Branches"}->{$pp})  ) {
+			print("Additional root $pp\n");
+			$onto_hash->{"Hierarchy"}->{$pp}=$onto_hash->{"Branches"}->{$pp};
+		    }
+		    if ( ! exists($onto_hash->{"Branches"}->{$pp}->{$twig} ) ){
+			$onto_hash->{"Branches"}->{$pp}->{$twig}=$onto_hash->{"Branches"}->{$twig};
+			if ( exists $onto_hash->{"Twigs"}->{$twig}->{$pp} ) {
+			    warn("Twig already has parent");
+			}
+			$onto_hash->{"Twigs"}->{$twig}->{$pp}=$pp;#$onto_hash->{"Branches"}->{$pp};
+		    }
+		    last;
+		}
+	    }
+	}
+	push(@potential_parents,$twig);
+    }
+    #dump(%{$onto_hash->{"Branches"}});
+    #dump(%{$onto_hash->{"Hierarchy"}});
+    #dump(%{$onto_hash->{"Twigs"}});
+
+    #Data->Dumper($onto_hash->{"Branches"});
+    #use Data::Dumper;
+    #Data::Dumper($onto_hash->{"Branches"});
+    #display_complex_data_structure($onto_hash->{"Branches"});
+    #display_complex_data_structure($onto_hash->{"Hierarchy"});
+    #display_complex_data_structure($onto_hash->{"Twigs"});
+    #
+    # Loop over all lines, pull out ontology levels
+    #
+    if(0){foreach (keys( %{$o_table->{"t_line"}}) ) {
+    	#dump($_);
+	#dump(ref $_);
+	my $o_entry=$o_table->{"t_line"}->{$_};
+	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
+	#my @parts=@o_columns;
+	@parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+	for(my $pn=0;$pn<=$#parts;$pn++){
+	    # process the different levels of ontology, get the different ontology names.
+	    my $branch_name=$parts[$pn]; # meta structure name
+	    trim($branch_name);
+	    my $tnum="";
+	    ($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
+	    $tnum="" unless defined $tnum;
+	    $parts[$pn]=$branch_name;
+	}
+	@parts=reverse(@parts);
+    }}
+    #
+    # Update ontology_table
+    #
+    # adding direct assignments array for branches which have valid twigs.
+    # so we know which twigs a leaf belongs to in the main code.
     my $max_levels=1;
     foreach (keys( %{$o_table->{"t_line"}}) ) {
 	my $o_entry=$o_table->{"t_line"}->{$_};
 	#    for each superstructure of the line,
-	my @super_structs=@{$onto_hash->{"line_to_struct"}->{$o_entry->{"t_line"}}};
-	#dump(@super_structs);
-	my $super_struct_hash;
-	for my $super (@super_structs) {
-	    if ( ! exists($onto_hash->{"SuperStructures"}->{$super} ) ) {
-		print("Missing $super\n");
-	    }
-	    #
-	    $super_struct_hash->{$super}=scalar(@{$onto_hash->{"SuperStructures"}->{$super}}); # this isnt right.
-	    #dump($onto_hash->{"SuperStructures"}->{$super});
-	}
-	#dump($super_struct_hash);
+	@super_structs=@{$onto_hash->{"line_to_struct"}->{$o_entry->{"t_line"}}};# reusing var from above.
 	# sort keys by value, descending (use a,b for ascending, or b,a for descending).
 	#my %h; $h{"test2"}=1; $h{"test1"}=60; $h{"test3"}=30; 
 	#my @h_keys = sort { $h{$a} <=> $h{$b} } keys(%h);
@@ -1739,26 +1890,72 @@ sub cleanup_ontology_levels {
 	##("test1", "test3", "test2")
 	#dump(@h_keys);
 	##("test2", "test3", "test1")
-	@super_structs = sort { $super_struct_hash->{$b} <=> $super_struct_hash->{$a} } keys(%$super_struct_hash);
 	#dump(@super_structs);
+	@super_structs = sort { $super_struct_hash->{$b} <=> $super_struct_hash->{$a} } @super_structs;
+	#dump(@super_=
 	# 
-	# use this info to bludgeon current ontology entry.
+	# update current ontology entry with the correct level count.
 	#
 	if($max_levels<scalar(@super_structs)){
 	    $max_levels=scalar(@super_structs);
 	}
-	for(my $ln=1;$ln<=scalar(@super_structs)||exists($o_entry->{sprintf("Level_%i",$ln+1)});$ln++){
+	for(my $ln=1;$ln<=scalar(@super_structs)||exists($o_entry->{sprintf("Level_%i",$ln)});$ln++){
 	    #if(exists($o_entry->{sprintf("Level_%i",$ln+1)}) ) {
+	    my $level_string=sprintf("Level_%i",$ln);
 	    if ($ln>scalar(@super_structs)) {
-		delete $o_entry->{sprintf("Level_%i",$ln+1)};
+		print($o_entry->{"Name"}.": KILL LEVEL $level_string\n");
+		delete $o_entry->{$level_string};
 	    } else {
-		$o_entry->{sprintf("Level_%i",$ln)}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
+		$o_entry->{$level_string}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
 	    }
 	}
-
+	#
+	# make direct assignment list for this structure.
+	#
+	my @direct_assignments;
+	for(my $s_c=0;$s_c<=$#super_structs;$s_c++){
+	    my $cur=shift(@super_structs);
+	    my $fail_status=0;
+	    for my $test_struct (@super_structs){
+		if ( exists($onto_hash->{"Branches"}->{$cur}->{$test_struct}) ){
+		    print("Found $test_struct as part of $cur\n") if ($debug_val>40);
+		    $fail_status=1;
+		    last;
+		}
+	    }
+	    if ( ! $fail_status ) {
+		push(@direct_assignments,$cur);
+	    }
+	    push(@super_structs,$cur);# Add tested struct to end of list
+	}
+	#
+	# Check that at least one structure will be directly assigned. This code should never run.
+	#
+	my $err_t="";
+	if( ! scalar(@direct_assignments) ) {
+	    $err_t="Err Line: ".$o_entry->{"t_line"}." ".join(",",@super_structs).")";
+	    my $t_hash;
+	    for my $structure(@super_structs) {
+		$t_hash->{$structure}=$onto_hash->{"Branches"}->{$structure};
+	    }
+	    
+	    dump(@super_structs);
+	    display_complex_data_structure($t_hash);
+	}
+	if ( $debug_val>=40){
+	    printf("%s %i/%i ( %s)%s.\n",
+		   $o_entry->{"Name"},
+		   scalar(@direct_assignments),scalar(@super_structs),
+		   join(",",@direct_assignments),
+		   $err_t);
+	}
+	if( scalar(@direct_assignments) > 0 ) {
+	    $o_entry->{"DirectAssignment"}=\@direct_assignments;
+	}
+	
+	    
+	#dump($o_entry);
     }
-    #    sort supers by their content count. Arrange largest to smallest, That is a good approximation of correct.
-    # MAYBE we should look deeper, but lets not bother at first.
     #
     # Re-write header of o_table.
     #
@@ -1778,7 +1975,8 @@ sub cleanup_ontology_levels {
     }
     #dump(%{$o_table->{'Header'}});
     #dump($o_table->{"Name"});
-
+    
     #exit;
     return $onto_hash;
 }
+
