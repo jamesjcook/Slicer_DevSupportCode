@@ -25,7 +25,7 @@ use Getopt::Std;# qw(getopts);
 use File::Basename;
 #use String::Util qw(trim); $branch_name=trim($branch_name)
 use Text::Trim qw(trim);
-
+use List::MoreUtils qw(uniq);
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
 use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
@@ -231,10 +231,16 @@ my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
 #exit;
 
 
-my $ontology=cleanup_ontology_levels($o_table);
 
-
-
+my $ontology;
+$ontology=cleanup_ontology_levels($o_table);
+# if (keys %{ $ontology } ) {
+#     print ("YES-keys\n");
+# }
+# if (! keys %{ $ontology } ) {
+#     print ("NO-keys\n");
+# }
+#exit;   
 ####
 # New method, we have our text spreadsheets loaded.
 ####
@@ -271,48 +277,39 @@ print("\n\n");
 
 my $rootHierarchyNodeID="vtkMRMLModelHierarchyNode";#vtkMRMLModelHierarchyNode1 #vtkMRMLHierarchyNode1"
 my $rootHierarchyNode={};
-if ( 1 ) {
-    # The other code was set aside beacause we cant rely on it being the first node.
-    # so, we'll get the first node, if that node has a parentNodeRef, we'll follow it until we find a node without a parent.
-    my @vtkMRMLHierarchyNodes=mrml_attr_search($mrml_data,"id",$rootHierarchyNodeID,"ModelHierarchy");
-    # I think this'll find two nodes, One ModelHierarchy directly attahced to the MRML section of the hash,
-    # and another directly attached to SceneView, which is attached to MRML. As far as i can tell these are the same.
-    # There is just an inherrent inefficiency in the way slicer stores its information.
-    if (  $#vtkMRMLHierarchyNodes<0 ) {#there is at least one node.
-	die("No root MRML nodes!!!!");
-    }
-
-    my $rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
+{
+    $rootHierarchyNode=$mrml_data->{"MRML"}->{"ModelHierarchy"}[0]; # first modelhierarchy node
+    #$rootHierarchyNode=$mrml_data->{"MRML"}->{"ModelHierarchy"}[$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}]; # last modelhierarchy node
     # while the current root has a parent, its not really the root... so we should get its parent.
-    while (exists ($rootHierarchyNode->{"parentNodeRef"}) ) { 
-	my @parent_candidates=mrml_find_by_id($mrml_data,$rootHierarchyNode->{"parentNodeRef"}); # could i just scalar that for how i'm doing things?
-	$rootHierarchyNode=$parent_candidates[0];
+    while (exists ($rootHierarchyNode->{"parentNodeRef"}) ) {
+	print("Looking up ".$rootHierarchyNode->{"parentNodeRef"}."\n");
+	# using exact find.
+    	my @parent_candidates=mrml_find_by_id($mrml_data,'^'.$rootHierarchyNode->{"parentNodeRef"}.'$',"ModelHierarchy");
+	while (scalar(@parent_candidates) && ! keys %{ $parent_candidates[0]} ) {
+	    shift(@parent_candidates);
+	}
+	if (scalar(@parent_candidates) && keys %{ $parent_candidates[0]} ) {
+	    $rootHierarchyNode=$parent_candidates[0];
+	} else {
+	    print("EMPTYNODE\n");
+	}
+	if (!scalar(@parent_candidates) ){
+	    die("PARENTLOOKUPFAILURE");
+	}
     }
     if ( ! defined $rootHierarchyNode->{"id"} ) {
-	dump(@vtkMRMLHierarchyNodes);die("Couldnt find node");
+	die("Couldnt find node");
     } else {
 	print("root is ".$rootHierarchyNode->{"id"}."\n");
-	#exit;
     }
     $rootHierarchyNodeID=$rootHierarchyNode->{"id"};
-    #$rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
-    #print("Found ".scalar @vtkMRMLHierarchyNodes." Hierarchy root(s).\n");
-    
-} else {
-
-    $rootHierarchyNodeID="vtkMRMLModelHierarchyNode1";
-    my @vtkMRMLHierarchyNodes=mrml_attr_search($mrml_data,"id",$rootHierarchyNodeID."\$","ModelHierarchy");
-    # I think this'll find two nodes, One ModelHierarchy directly attahced to the MRML section of the hash,
-    # and another directly attached to SceneView, which is attached to MRML. As far as i can tell these are the same.
-    # There is just an inherrent inefficiency in the way slicer stores its information.
-    #$mrml_node->{"name"}
-    if (  $#vtkMRMLHierarchyNodes>=0 ) {#there is at least one node.
-	$rootHierarchyNode=$vtkMRMLHierarchyNodes[0];
-	print("Found ".scalar @vtkMRMLHierarchyNodes." Hierarchy root(s).\n");
-    } else {
-	die("No root MRML nodes!!!!");
-    }
 }
+if (! keys %{ $rootHierarchyNode} ) {
+    print("Root Node EMPTY!!!");
+    exit;
+}
+#dump($rootHierarchyNode);
+#exit;
 #my $mrml_data=mrml_find_by_name($mrml_data->{"MRML"},"whiteSPCmatter","ModelHierarchy");
 #my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter","ModelHierarchy");
 #my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter");#,"ModelHierarchy");
@@ -378,6 +375,7 @@ foreach my $mrml_model (@mrml_nodes) {
     }
 
     #### NEED TO ENSURE THE n_a HASH IS CORRECT HERE.
+    # theoritically we've run the cleanup function ensureing we're correct.
     #
     # For poorly formed entries we can have unfilled or missing fields!
     # 
@@ -522,37 +520,37 @@ foreach my $mrml_model (@mrml_nodes) {
 	$alt_name=$Abbrev;
 	$n_a{"Name"}=$Abbrev;
     }
-    #printf("n=%s,ab=%s,v=%i\n",$alt_name,$Abbrev,$value);
-    #next;#ondebuging, just goto next
-    #  add wiring....?
-    my $s_path='Static_Render/LabelModels';
+    my $parent_hierarchy_node_id=$rootHierarchyNodeID;
     my $parent_ref=$rootHierarchyNode;
+    my $model_display_template;
+    my $hierarchy_template;
+    
     my @vtkMRMLModelDisplayNodes;
     #print("dumping right now just forstesting\n");dump ($parent_ref); exit;
     #mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
     if ( defined ($parent_ref->{"displayNodeID"} ) ) {
 	@vtkMRMLModelDisplayNodes=mrml_attr_search( $mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
     } else {
+	warn("WARN: Had to just grab the first ModelDisplay due to missing root");
 	# if we dont have a parent node, then just get the first one, hope its the right thing.
-	#push(@vtkMRMLModelDisplayNodes,$mrml_data->{"MRML"}->{"ModelDisplay"}->[0]);
-	@vtkMRMLModelDisplayNodes=mrml_find_by_id($mrml_data,$mrml_nodes[0]->{"displayNodeRef"}."\$"); # the display node ref); # could i just scalar that for how i'm doing things?
-	if ( scalar(@vtkMRMLModelDisplayNodes) == 0  ){
+	@vtkMRMLModelDisplayNodes=mrml_find_by_id($mrml_data,$mrml_nodes[0]->{"displayNodeRef"}."\$"); 
+	if ( scalar(@vtkMRMLModelDisplayNodes) == 0 || ! keys %{$vtkMRMLModelDisplayNodes[0]} ){
+	    dump($parent_ref);
 	    die "Parent ref problem";
-	} else {
-	    #dump (@vtkMRMLModelDisplayNodes);
-	    #exit;
 	}
     }
-    my $model_display_template = \%{clone $vtkMRMLModelDisplayNodes[0]};
-    my $parent_hierarchy_node_id=$rootHierarchyNodeID;
-    my $hierarchy_template = \%{clone $parent_ref};
+    
+    $model_display_template = \%{clone $vtkMRMLModelDisplayNodes[0]};
+    # could set any favored setting right here.
+    # $model_display_template->{"THINGY"}=VALUEDESIRED;
+    $model_display_template->{"opacity"}="0.7";
+    #dump($model_display_template);
+    $hierarchy_template = \%{clone $parent_ref};
+    $hierarchy_template->{"expanded"}="false";
     #dump($hierarchy_template);
-    #sleep_with_countdown(3);
     my $sort_val=$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}; # current count of modelhierarchy nodes
     $hierarchy_template->{"sortingValue"}=$sort_val;
-
-
-    
+    #exit;
     #  while level_next exists, check for level, add it
     # grep {/Level_[0-9]+$/} keys %$o_entry;
     #dump($o_entry);
@@ -563,7 +561,7 @@ foreach my $mrml_model (@mrml_nodes) {
     if (scalar(@parts)>0 ) {
 	print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
 	#dump(%$o_entry); # this works.
-	#dump(%{$o_entry{@parts}}); # his doesnt.
+	#dump(%{$o_entry{@parts}}); # this doesnt.
 	#dump(%{$o_entry}); this works
 	#dump(@{$o_entry}{@parts});# THIS WORKS!!!!
 	#dump($o_entry->{@parts});# this is undef
@@ -575,22 +573,45 @@ foreach my $mrml_model (@mrml_nodes) {
     }
     print("\t(\"".join("\", \"",@parts)."\")\n")  if $debug_val>=45;
     #next;
-
-    my $ref=\%onto_hash;    
-    my $level_show_bool=0; # bool to show what levels we've got when this loop ends. This is used to show error messages. 
-    for(my $pn=0;$pn<=$#parts;$pn++){# proces the different levels of ontology, get the different ontology names, create a path to save the structure into.
+    my $ref;#=\%onto_hash;
+    my @parent_hierarchy_names=($parts[$#parts]);# In simple mode, there is only one parent hierarchy name.
+    if (keys %{ $ontology } ) {# if we're the new ontology in memory code.
+	@parent_hierarchy_names=@{$o_entry->{"DirectAssignment"}} ;
+	#print ("YES-keys\n");
+	if ( scalar(@parent_hierarchy_names)>1 ){ 
+	    @parts=@parent_hierarchy_names;# for all direct assignments, get their parent.
+	    for my $assign (@parts) {
+		my $test=$assign;
+		while(exists( $ontology->{"Twigs"}->{$test} ) ){#while not a root node, add to list, and get ready to test next.
+		    ($test)=keys(%{$ontology->{"Twigs"}->{$test}});
+		    push(@parts,$test);
+		}
+	    }
+	    @parts=uniq(@parts);
+	    #dump(@parts);
+	    @parts = sort { $ontology->{"SuperCount"}->{$b} <=> $ontology->{"SuperCount"}->{$a} } @parts;
+	    print("\tMultiAssignment(".join(" ",@parts).")\n") if ($debug_val>=25);
+	    
+	} else { print("\tSingleAssignment\n") if ($debug_val>=35);}
+    }
+    if (scalar(@parts)<1 ) {
+	die("NO PARTS TO ASSIGN");
+    }
+    my $level_show_bool=0; # bool to show what levels we've got when this loop ends. This is used to show error messages.
+    for(my $pn=0;$pn<=$#parts;$pn++){
+	# proccess the different levels of ontology, get the different ontology names, create a path to save the structure into.
 	#
 	my $branch_name=$parts[$pn];#meta structure name
-		#use String::Util qw(trim); $branch_name=trim($branch_name)
-	use Text::Trim qw(trim);# this doesnt work to limit the use of the Text::Trim module. Might as well be at the top of the script. 
 	trim($branch_name);		
 	my $tnum="";
 	($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
 	$tnum="" unless defined $tnum;
 	#universally trash tnum.
 	$tnum="";
-
-	#print("bn $branch_name\n");
+	$branch_name=~ s/[,\/# ]/_and_/xg;#clean structure name of dirty elements replacing them with _and_.
+	$branch_name=~ s/[-\/# ]/_to_/xg;#clean structure name of dirty elements replacing them with _to_.
+	$branch_name=~ s/[,\/# ]/_/xg;#clean structure name of remaining dirty elements replacing them for underscores(commas forwardslashes poundsigns and spaces).
+	$branch_name=~ s/__+/_/xg;  # Collapse any number of double underscore to single
 	if ( ( 0 )
 	     # THIS IS NOT DEACTIVATING THIS CODE, THIS IS FOR READABILITY LINEING THE CONDITIONS UP ON SUBSEQUENT LINES.
 	     || ( not defined $branch_name ) 
@@ -598,79 +619,104 @@ foreach my $mrml_model (@mrml_nodes) {
 	     || ( $branch_name =~ /^\s*$/ )
 	     || ( $branch_name eq '0' ) 
 	    ) {
-	    #|| ( $branch_name == 0 ) ) {
-	    
-	    #warn("bad tree name($branch_name), skipping to additional levels");
-	    #sleep_with_countdown(20);
+	    warn("bad tree name($branch_name), skipping to additional levels");
 	    $level_show_bool=1;
 	    next; 
-	    warn("bad tree name($branch_name), bailing on additional levels");
-	    #sleep_with_countdown(20);
-	    last; # drop out of the hierarchy builder
 	}
-	if ( 0 ) {
-	if ( ( $branch_name =~ /_to_/x )
-	     || ($branch_name =~/_and_/x) ){
-	    warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
-	    ### 
-	    # @parts = $line =~ /([^\t]+)/gx;
-	    ###
-	    #my @b_parts= $branch_name =~ /(.*?)((:?_to_|_and_)(.*))*/gx; # this was a failure : (
-	    my @b_parts=split("_to_",$branch_name);
-	    my @b_parts2=split("_and_",$branch_name);
-	    if ($#b_parts<$#b_parts2) {
-		@b_parts=@b_parts2;
-		# We're a range, now we should set up the whole range;
-	    }
-	    print("branch: $branch_name ");
-	    dump(@b_parts);
-	    $branch_name=$b_parts[0];
-	} }
-	if  ( 0 
+	if (! keys %{ $ontology } ) {
+	    if ( ( $branch_name =~ /_to_/x )
+		 || ($branch_name =~/_and_/x) ){
+		warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
+		my @b_parts=split("_to_",$branch_name);
+		my @b_parts2=split("_and_",$branch_name);
+		if ($#b_parts<$#b_parts2) {
+		    @b_parts=@b_parts2;
+		}
+		print("branch: $branch_name ");
+		dump(@b_parts);
+		$branch_name=$b_parts[0];
+	    } 
+	}
+	if  ( ! keys %{ $ontology } 
 	    && $branch_name =~ /^[rmp][0-9]{1,2}(?:[^\w]+[\w]*)?$/x) {
 	    warn("\tAlex said to skip these structures($branch_name)");
 	    next;
 	}
-	
-	#$branch_name=~ s/[,\/#]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
-	$branch_name=~ s/[,\/# ]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
-	$s_path="$s_path/$tnum$branch_name"; #add cleanname to subpath.
-	if ( ! defined (@{$l_1{$tnum.$branch_name}}) ) {
-	    @{$l_1{$tnum.$branch_name}}=();
-	    #print("\n---ON-level:$pn-UNDEF:$tnum$branch_name---\n");
-	}
-	if ( ! -d $s_path ){
-	    print("mkdir $s_path\n") if ($debug_val>=45);
-	    if ( $do_unsafe) {
-		mkdir ($s_path);
+	my $part_node_display_id=$tnum.$branch_name."Display";
+	my $part_node_hierarchy_id=$tnum.$branch_name."Hierarchy";
+	my $node_exists_bool=0;
+	if (keys %{ $ontology } ) {# if we're the new ontology in memory code.
+	    #if ( ! exists $ontology->{"Twigs"}->{$tnum.$branch_name} && exists $ontology->{"Hierarchy"}->{$tnum.$branch_name} ) {
+	    #}
+    	    #if ( ! exists $ontology->{"Twigs"}->{$tnum.$branch_name} ) {  # this code works, but its duplicataive.
+	    # IF not exist, This node had no parents,and we're a direct root node.
+	    #}
+	    if ( exists $ontology->{"Hierarchy"}->{$tnum.$branch_name} ) {
+		# IF exist, This node is a direct root node.
+		if ( exists $ontology->{"Twigs"}->{$tnum.$branch_name} ) {
+		    die "PARENT DETECTION FAILURE";
+		}
+		#print("Parent check Hierarchy TRUE\n");
+		$parent_hierarchy_node_id=$rootHierarchyNodeID;
+		#$hierarchy_template = \%{clone $parent_ref};
+		$ref=$ontology->{"Hierarchy"};
+	    } elsif ( exists $ontology->{"Twigs"}->{$tnum.$branch_name} ) {
+		my ($par_name) = keys(%{$ontology->{"Twigs"}->{$tnum.$branch_name}});
+		my $grand_name="";
+		if ( exists($ontology->{"Twigs"}->{$par_name}) ) {
+		    #print("\tHasGrandparent\n");
+		    #($grand_name) = keys(%{$ontology->{"Twigs"}->{$par_name}});
+		}
+		$ref=$ontology->{"Branches"}->{$par_name};
+		#OH BOLLOCKS I NEED THE PARENTS PARENT FOR THIS TO BE RIGHTEOUS, wait, no i dont.... that only happens for leaves.
+		$parent_hierarchy_node_id=$grand_name.$par_name."Hierarchy";# COULD BE PROBLEMS WITH tnum HERE> We're effictively ommiting it right now.
+		#$hierarchy_template = \%{clone $parent_ref};
+		#dump(%$ref);
+	    } else {
+		#dump($ontology->{"Twigs"});
+		dump(keys(%{$ontology->{"Branches"}}));
+		dump($ontology->{"Branches"}->{$tnum.$branch_name});
+		dump($ontology->{"Hierarchy"});
+		die ("DEADEND with $branch_name, orphaned branch?");
+	    }
+	    if ( ! exists ($ref->{$tnum.$branch_name}) ) {
+		print("ERRROR: Branch not available\n");
+		dump (%$ref);
+	    }
+	    # Check if this node has been defined already.
+	    #OH Ho, needed exact find!
+	    my @existing_nodes=mrml_find_by_id($mrml_data,'^'.$part_node_hierarchy_id.'$',"ModelHierarchy");
+	    if (scalar(@existing_nodes)>0 ){
+		$node_exists_bool=1;
 	    }
 	}
-	push(@{$l_1{$tnum.$branch_name}},$value);
-	if ( ! defined $ref->{$tnum.$branch_name}) {# clever way to build hierarchy hash on fly. The hierarchy hash is just a holder for the structure. It is only used here to keep track of whether we've sceen this node before or not.
-	    my $spc=sprintf("  "x$pn);
-	    print("$spc $branch_name not there, adding ... \n") if ($debug_val>=25);
-	    $ref->{$tnum.$branch_name}={};
+	#print($tnum.$branch_name." HRD EXIT\n"); exit;
+	#print($tnum.$branch_name." SKIPPER\n"); next;
+	if ( ! exists($ref->{$tnum.$branch_name}) || ! $node_exists_bool ) {
+	    # clever way to build hierarchy hash on fly. The hierarchy hash is just a holder for the structure.
+	    # It was only used here to keep track of whether we've sceen this node before or not.
+	    my $spc=sprintf("  "x$pn);#indent nspaces times...
+	    print("$spc$branch_name($part_node_display_id,$part_node_hierarchy_id) not there, adding ... \n") if ($debug_val>=25);
+	    if (! keys %{ $ontology } ) {# not the new ontology in memory code.
+		warn("OlderBadderCode\n");
+		$ref->{$tnum.$branch_name}={};} # declare our empty ref so we can continue filling it in
 	    # update template with values for this structure.
-	    $model_display_template->{"name"}=$branch_name."Display";
-	    $model_display_template->{"id"}=$tnum.$branch_name."Display";
-	    #$model_display_template->{"id"}="vtkMRMLModelDisplayNode".($hierarchy_template->{"sortingValue"}+1);
-	    if ( 1 ) { #WHILE WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
-		#FIXME
-		#TODO
+	    $model_display_template->{"name"}=$branch_name."_";
+	    $model_display_template->{"id"}=$part_node_display_id;
+	    if ( 1 ) { #FIXME #TODO #WHILE WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
 		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
-							   ,120,120,120);
+							   ,0.25,0.25,0,25);
 	    } else {
 		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
 							   ,rand(1),rand(1),rand(1));
-		#$model_display_template->{"color"}=sprintf("%0.0f",rand(1))
-		#." ".sprintf("%0.1f",rand(1))
-		#." ".sprintf("%0.1f",rand(1));
 	    }
 	    $model_display_template->{"visibility"}="false";
 	    $hierarchy_template->{"name"}=$branch_name;
-	    $hierarchy_template->{"id"}=$tnum.$branch_name;
+	    $hierarchy_template->{"id"}=$part_node_hierarchy_id;
 	    $hierarchy_template->{"parentNodeRef"}=$parent_hierarchy_node_id;
 	    $hierarchy_template->{"displayNodeID"}=$model_display_template->{"id"};
+	    if ( ! exists( $hierarchy_template->{"sortingValue"} ) ) {
+		$hierarchy_template->{"sortingValue"}=1;}
 	    $hierarchy_template->{"sortingValue"}=$hierarchy_template->{"sortingValue"}+1;
 	    $hierarchy_template->{"expanded"}="true";
 	    # now add the template to MRML->ModelHierarchy and MRML->SceneView->ModelHierarchy
@@ -679,59 +725,115 @@ foreach my $mrml_model (@mrml_nodes) {
 	    push(@{$mrml_data->{"MRML"}->{"ModelDisplay"}},\%{clone $model_display_template}); 
 	    push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"}},\%{clone $hierarchy_template});
 	    push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelDisplay"}},\%{clone $model_display_template});
-	    #@vtkMRMLHieraryNodes=mrml_attr_search($mrml_data,"associatedNodeRef",$rootHierarchyNodeID."\$","ModelHierarchy");
-	    # if the ref dont exist, we add it... hmm how/when do we set the type to vtkMRMLModelHierarchyNode?
-	    #printf("--template_val--");
-	    #dump($hierarchy_template);
-	    #dump($mrml_data->{"MRML"}->{"ModelHierarchy"});
-	    #dump($mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"});
-	    #dump($mrml_data->{"MRML"}->{"ModelDisplay"});
-	    #dump($mrml_data->{"MRML"}->{"SceneView"}->{"ModelDisplay"});
 	}
-	#ast;
-	$ref=$ref->{$tnum.$branch_name}; # this is our destination point for our structure once we've ensured the whole hierarchy before it is built.
-	$parent_hierarchy_node_id=$tnum.$branch_name;
+	if (! keys %{ $ontology } ) {# not the new ontology in memory code.
+	    $ref=$ref->{$tnum.$branch_name}; # this is our destination point for our structure once we've ensured the whole hierarchy before it is built.
+	    $parent_hierarchy_node_id=$tnum.$branch_name."Hierarchy";
+	}
 	#print("."x$pn);
 	#print("\n");
-    }
+    } 
     if ( $level_show_bool ) {
 	# Some levels haed issues here they all are.
 	warn("bad tree name in group ( ".join(@parts," ")." ), skipping to additional levels");
     }
+    #@vtkMRMLHieraryNodes=mrml_attr_search($mrml_data,"associatedNodeRef",$rootHierarchyNodeID."\$","ModelHierarchy");
+    # if the ref dont exist, we add it... hmm how/when do we set the type to vtkMRMLModelHierarchyNode?
+    #printf("--template_val--");
+    #dump($hierarchy_template);
+    #dump($mrml_data->{"MRML"}->{"ModelHierarchy"});
+    #dump($mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"});
+    #dump($mrml_data->{"MRML"}->{"ModelDisplay"});
+    #dump($mrml_data->{"MRML"}->{"SceneView"}->{"ModelDisplay"});
+    #### END OLD MULTI_LEVEL PARTS CODE
+    #dump(%onto_hash);
+    #dump(%{$ref});
+    #dump(%l_1);
+    #exit;
+    # next;
     my $node=$mrml_model;
     #display_complex_data_structure($node);
 
     my $storage_node_id;
     my $storage_node;
-#    my $parent_hierarchy_node_id="BOGUS";
+    #
+    # Assign Structure to its parent node(s)
+    #
+    #    my $parent_hierarchy_node_id="BOGUS";
+    # this is currently the singular parent code. For multi-parentage, we'll have to duplicate the modelhierarchy entry for each alternate parent.
     my $mrml_node_id=$mrml_model->{"id"};    
     if ( defined $mrml_node_id  ) {
-	my @model_hierarchy_nodes=mrml_attr_search($mrml_data,"associatedNodeRef",$mrml_node_id."\$","ModelHierarchy");
+	my @model_hierarchy_nodes=mrml_attr_search($mrml_data,"associatedNodeRef",'^'.$mrml_node_id.'$',"ModelHierarchy");
+	if(scalar(@model_hierarchy_nodes)>1){
+	    warn("Multiple Hierarchy Input Nodes");
+	}
 	$storage_node_id=$mrml_model->{"storageNodeRef"};
 	
-	    #print("found ".($#model_hierarchy_nodes+1)." references to this node\n");
-	    foreach my $m_h_node ( @model_hierarchy_nodes){
-		#print("change node $m_h_node->{id} $m_h_node->{name} to $alt_name\n");
-		$m_h_node->{"parentNodeRef"}=$parent_hierarchy_node_id;
-		if ( 1 ) {# renameing code, disabled for right now.
-		if($rename_type eq 'clean' ){
-		    $m_h_node->{"name"}="$alt_name";
-		} elsif($rename_type eq 'Structure' ){ #was modelfile
-		    $m_h_node->{"name"}="$model_prefix${value}_$alt_name";
-		    $mrml_model->{"name"}="$model_prefix${value}_$alt_name";
-		} elsif( $rename_type eq 'Name')  { #name?
-		    $m_h_node->{"name"}="$mrml_name";
-		    $mrml_model->{"name"}="$mrml_name";
-		} elsif( $rename_type eq 'Abbrev')  { 
-		    $m_h_node->{"name"}="$Abbrev";
-		    $mrml_model->{"name"}="$Abbrev";
-		} else { 
-		    $m_h_node->{"name"}="$model_prefix${value}_$alt_name";
-		    $mrml_model->{"name"}="$model_prefix${value}_$alt_name";
-		}
-		
+	#print("found ".($#model_hierarchy_nodes+1)." references to this node\n");
+	my $m_h_node={};
+	for(my $n_n=0;$n_n<scalar(@model_hierarchy_nodes);$n_n++){
+	    $m_h_node= $model_hierarchy_nodes[$n_n];
+	    #print("change node $m_h_node->{id} $m_h_node->{name} to $alt_name\n");
+	    if (! exists($m_h_node->{"id"} ) ) {
+		warn("Bad node ");
+		dump($m_h_node);
+	    }
+	    if($rename_type eq 'clean' ){
+		$m_h_node->{"name"}="$alt_name";
+	    } elsif($rename_type eq 'Structure' ){ #was modelfile
+		$m_h_node->{"name"}="$model_prefix${value}_$alt_name";
+		$mrml_model->{"name"}="$model_prefix${value}_$alt_name";
+	    } elsif( $rename_type eq 'Name')  { #name?
+		$m_h_node->{"name"}="$mrml_name";
+		$mrml_model->{"name"}="$mrml_name";
+	    } elsif( $rename_type eq 'Abbrev')  { 
+		$m_h_node->{"name"}="$Abbrev";
+		$mrml_model->{"name"}="$Abbrev";
+	    } else { 
+		$m_h_node->{"name"}="$model_prefix${value}_$alt_name";
+		$mrml_model->{"name"}="$model_prefix${value}_$alt_name";
 	    }
 	}
+	#	dump(@parent_hierarchy_names);exit;
+	if ( exists($m_h_node->{"id"} ) ) {
+	    my $m_h_base_id=$m_h_node->{"id"};
+	    my $m_m_base_id=$mrml_model->{"id"};
+	    #push(@{$mrml_data->{"MRML"}->{"Model"}},\%{clone $mrml_model});
+	    #push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"Model"}},\%{clone $mrml_model});
+	    my $p_c=0;
+	    if ( ! scalar(@parent_hierarchy_names)>=1 ) {
+		die ("NO PARENTS");
+	    }
+	    for my $parent_name ( @parent_hierarchy_names) {
+	    #if ( 1 ) {
+		#my $parent_name="";
+		my $grand_name="";
+		#if ( exists($ontology->{"Twigs"}->{$parent_name}) ) {
+		    #print("Has grand parent ".join('',keys(%{$ontology->{"Twigs"}->{$parent_name}}))."\n");
+		    #($grand_name) = keys(%{$ontology->{"Twigs"}->{$parent_name}});
+		#}
+		my $cur_node=$mrml_model;
+		if ($p_c>0) {
+		    $cur_node=\%{clone($mrml_model)};
+		    $m_h_node->{"sortingValue"}=$m_h_node->{"sortingValue"}+1;
+		}
+		$cur_node->{"id"}=$parent_name.$m_m_base_id;
+		$m_h_node->{"parentNodeRef"}=$parent_name."Hierarchy";
+		$m_h_node->{"associatedNodeRef"}=$cur_node->{"id"};
+		$m_h_node->{"id"}=$parent_name.$m_h_base_id;
+		if ($p_c>0) {
+		    push(@{$mrml_data->{"MRML"}->{"Model"}},\%{clone $cur_node});
+		    push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"Model"}},\%{clone $cur_node});
+		}
+		push(@{$mrml_data->{"MRML"}->{"ModelHierarchy"}},\%{clone $m_h_node});
+		push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"}},\%{clone $m_h_node});
+		$p_c++;
+	    }
+	} else {
+	    warn("NO ID FOR NODE!");
+	    dump($m_h_node);
+	}
+
     } else {
 	if (!scalar $mrml_model ){
 	    warn("OHh NOOOO node id not set ! Sleeping a bit while you look at this!");
@@ -742,6 +844,8 @@ foreach my $mrml_model (@mrml_nodes) {
 	}
 	next;
     }
+
+    
     my @s_nodes=mrml_attr_search($mrml_data,"id",$storage_node_id."\$","ModelStorage");
     $storage_node=$s_nodes[0];
     my $file_src;#="Static_Render/ModelTree/$file_name.vtk";
@@ -778,9 +882,6 @@ foreach my $mrml_model (@mrml_nodes) {
 	$storage_node->{"fileName"}=$file_dest;
     }
     #$ref->{$alt_name}=$value;
-	    
-
-    
     if( 0 ) 
     {# safe but ugly name_handle
 	my( $alt_name,$c_fn);
@@ -816,26 +917,15 @@ while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) )
     if ( exists($c_table->{"t_line"}->{$test_line}) ){
 	my $h_entry=$c_table->{"t_line"}->{$test_line};
 	my $line;
-
-	if ( 1 ) {
-	    foreach (@fields) {
-		if (! exists $h_entry->{$_} ){
-		    printf($h_entry->{"Name"}." missing $_\n");
-		    $h_entry->{$_}=0;
+	foreach (@fields) {
+	    if (! exists $h_entry->{$_} ){
+		printf($h_entry->{"Name"}." missing $_\n");
+		$h_entry->{$_}=0;
 		}
-	    }
-	    $line=join(" ",@{$h_entry}{@fields})."\n";
-	} else {
-	$line=sprintf("%i %s %i %i %i %i\n",$h_entry->{"Value"},
-			 $h_entry->{$rename_type},
-			 $h_entry->{"c_R"},
-			 $h_entry->{"c_G"},
-			 $h_entry->{"c_B"},
-			 $h_entry->{"c_A"});
 	}
+	$line=join(" ",@{$h_entry}{@fields})."\n";
 	push(@color_table_out,$line);
     }
-
     $test_line++;
 }
 write_array_to_file($p_color_table_out,\@color_table_out);
@@ -876,53 +966,23 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
 
 	
 	my $line;
-	if ( 1 ) {
-	    my @values;
-	    for (my $vn=0;$vn<=$#fields;$vn++){
-		my $val=$h_entry->{$fields[$vn]};
-		if (! defined($val) ) {
-		    $val="";
-		} elsif( my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ) {
-		    # IF we match this regex 
-		    if ( (  defined($onum ) && defined($name)) 
-			 &&(length($onum)>0 && length($name)>0) ) {
-			$val=$name;
-		    }
-		}
-		push(@values,$val);
-	    }
-	    $line=join("\t",@values)."\n";	    
-	} elsif ( 0 ) {
-		#THIS CODE IS POOP! REQUIRES 4 LEVELS :p
-	    my @values=@{$h_entry}{@fields};
-	    # trim the organizational numbef off the names of levels
-	    my $start_field=2;
-	    for (my $vn=$start_field;$vn<$start_field+4;$vn++){
-		my $vx=$values[$vn];
-		if( defined($vx) ){
-		    my ($onum,$name)=$vx=~/^([0-9]+_)?(.*)$/x;
-		    if (defined ($name ) ) {
-			$values[$vn]=$name;
-		    } elsif (defined ($onum ) ) {
-			$values[$vn]=$onum;
-		    }
-		} else {
-		    $values[$vn]=0;
+	my @values;
+	for (my $vn=0;$vn<=$#fields;$vn++){
+	    my $val=$h_entry->{$fields[$vn]};
+	    if (! defined($val) ) {
+		$val="";
+	    } elsif( my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ) {
+		# IF we match this regex 
+		if ( (  defined($onum ) && defined($name)) 
+		     &&(length($onum)>0 && length($name)>0) ) {
+		    $val=$name;
 		}
 	    }
-	    # make the output line
-	    $line=join("\t",@values)."\n";
-	} else {
-	    $line=sprintf("%i %s %i %i %i %i\n",$h_entry->{"Value"},
-			 $h_entry->{$rename_type},
-			 $h_entry->{"c_R"},
-			 $h_entry->{"c_G"},
-			 $h_entry->{"c_B"},
-			  $h_entry->{"c_A"});
+	    push(@values,$val);
 	}
-	push(@ontology_out,$line);
+	$line=join("\t",@values)."\n";	    
+    	push(@ontology_out,$line);
     }
-
     $test_line++;
 }
 write_array_to_file($p_ontology_out,\@ontology_out);
@@ -930,596 +990,6 @@ write_array_to_file($p_ontology_out,\@ontology_out);
 exit;exit;exit;
 exit;exit;exit;
 exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-exit;exit;exit;
-my @ontology_csv; 
-load_file_to_array($p_ontology_in,\@ontology_csv);
-print("color_table ".($#ontology_csv+1)." lines loaded\n");
-print("ontology ".($#ontology_csv+1)." lines loaded\n");
-@mrml_nodes_loaded=mrml_find_by_id($mrml_data,".*"); # could i just scalar that for how i'm doing things?
-print("mrml ".($#mrml_nodes_loaded+1)." nodes loaded\n");
-
-
-my @parts;
-my @ontology_sheet_columns;
-my %ontology_header_index=();
-my @ontology_label_fields=();
-my @ontology_color_fields=();
-#my %l_1;
-#my %onto_hash=();
-# my %l_2;
-# my %l_3;
-# my %l_4;
-# my %l_5;
-
-#pull the column headers off the csv file, clean up their names.
-my $line=shift(@ontology_csv);
-$line =~ s/[ ]/_/gx;#space for underscore.
-chomp($line);
-@parts = $line =~ /([^\t]+)/gx;
-if ( $#parts < 3) {
-    warn("Used commas instead of tabs, You better have clean names.");
-    @parts = $line =~ /([^,]+)/gx;
-}
-if($#ontology_sheet_columns==-1 && $#parts >= 3){
-    print("ontology_sheet_columns assign:".join(" ",@parts)."\n");
-    @ontology_sheet_columns=@parts;
-    my $colN=0;
-
-    foreach (@parts){
-	$ontology_header_index{$_}=$colN;
-	if ( $_ =~ /Level_[0-9]/x ) {
-	    push(@ontology_label_fields,$_);
-	} elsif ($_ =~ /^c_[RGBA]$/x ) {
-	    push(@ontology_color_fields,$_);
-	}
-	$colN++;
-    }
-}
-#($who, $home)  = @ENV{"USER", "HOME"};      # hash slice
-@ontology_label_fields=sort(@ontology_label_fields);
-
-#@ontology_color_fields=sort(@ontology_color_fields);#this will unfortunately sort color columns, what I really need is them to be consistent.So, this is ok beacuase we're not going to really use them, and if we do we know c_A is alpha, c_B is blue, c_G is green, and c_R is red. AH but it DOES matter, because we want to compare to the values in the slicer color table so the order MUST match.
-# Lets switch then to checking if the appropriate number of entries exist, and THEN setting a constant order.
-if ($#ontology_color_fields==3){ #cuz there are f :p
-    printf("set onto. color fields\n");
-    @ontology_color_fields=qw(c_R c_G c_B c_A); 
-} else {
-    printf("No onto. color fields\n");
-}
-    
-#dump(@ontology_label_fields);
-#exit;
-my @d_Abbrev;   #input dirty Abbreviaion files found
-my @d_a_found; # output dirty Abbreviaions files found
-my @d_name;    #intput dirty name files found
-my @d_n_found; # output dirty name files found
-my @c_name;    #input clean name files found
-my @c_n_found; # output clean name files found
-#my $do_unsafe=0;
-my ($process_Abbrev_names,$process_full_names)=(0,0);
-#my @model_hierarchy_nodes=mrml_find_by_name($mrml_data,".*","ModelHierarchy");# should return only ModelHierarchyNodes
-# not that i'm using this variabl, so i'm commenting it out.
-
-
-# if ( ! defined $ref->{$tnum.$branch_name}) {# clever way to build hierarchy hash on fly. The hierarchy hash is just a holder for the structure. It is only used here to keep track of whether we've sceen this node before or not.
-#     my $spc=sprintf("  "x$pn);
-#     print("$spc $branch_name not there, adding ... \n") if ($debug_val>=25);
-#     $ref->{$tnum.$branch_name}={};
-#     # update template with values for this structure.
-#     $model_display_template->{"name"}=$branch_name."Display";
-#     $model_display_template->{"id"}=$tnum.$branch_name."Display";
-#     #####$model_display_template->{"id"}="vtkMRMLModelDisplayNode".($hierarchy_template->{"sortingValue"}+1);
-#     $model_display_template->{"color"}=sprintf("%0.0f",rand(1))
-# 	." ".sprintf("%0.1f",rand(1))
-# 	." ".sprintf("%0.1f",rand(1));
-#     $model_display_template->{"visibility"}="false";
-#     $hierarchy_template->{"name"}=$branch_name;
-#     $hierarchy_template->{"id"}=$tnum.$branch_name;
-#     $hierarchy_template->{"parentNodeRef"}=$parent_hierarchy_node_id;
-#     $hierarchy_template->{"displayNodeID"}=$model_display_template->{"id"};
-#     $hierarchy_template->{"sortingValue"}=$hierarchy_template->{"sortingValue"}+1;
-#     $hierarchy_template->{"expanded"}="true";
-#     # now add the template to MRML->ModelHierarchy and MRML->SceneView->ModelHierarchy
-#     #####push(@{$mrml_data->{"MRML"}->{"ModelHierarchy"}},%{clone $hierarchy_template});
-#     push(@{$mrml_data->{"MRML"}->{"ModelHierarchy"}},\%{clone $hierarchy_template});
-#     push(@{$mrml_data->{"MRML"}->{"ModelDisplay"}},\%{clone $model_display_template}); 
-#     push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"}},\%{clone $hierarchy_template});
-#     push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelDisplay"}},\%{clone $model_display_template});
-#     #####@vtkMRMLHieraryNodes=mrml_attr_search($mrml_data,"associatedNodeRef",$rootHierarchyNodeID."\$","ModelHierarchy");
-# }
-
-
-
-
-
-
-
-
-
-####
-# New method, we have our text spreadsheets loaded.
-####
-# we should look at each models from the xml, or from the color table.
-#foreach model in mrml_data
-#@mrml_nodes=mrml_find_by_name($mrml_data,".*",$alt_name,"Model");
-#@mrml_nodes=mrml_find_by_name($mrml_data->{"MRML"}->{"SceneView"},".*",$alt_name,"Model");
-#  while level_next exists, check for level, add it
-#  add wiring....?
-
-
-
-exit;
-my @color_table_lines;
-foreach $line (@ontology_csv) {
-    chomp($line);
-    #@parts = $line =~ /([^\t]+)/gx;# WHY DIDNT I USE SPLIT!!!!!
-    @parts = split("\t",$line);
-    if ( $#parts < 3) {
-	warn("Used commas instead of tabs, You better have clean names.") unless ($debug_val<45);
-	#@parts = $line =~ /([^,]+)/gx;# WHY DIDNT I USE SPLIT!!!!!
-	@parts = split(',',$line);
-    }
-    chomp(@parts);
-    #
-    #print(join(':',@parts)."\n");
-    if ( 0 ) { 
-	#print("$#parts");
-	#print("$#parts:$line\n");
-    } elsif ( $#parts >= 3) {
-	#print("......");
-	### INACTIVE
-	if ( 0 ) { # first pass for parse.
-	    my $struct_num=$parts[$#parts];
-	    #print("add struct $parts[$#parts]\t");
-	    for(my $pn=$#parts-1;$pn>1;$pn--){
-		# 
-		my $a_name=$parts[$pn];#$ontology_sheet_columns[$pn]
-		$a_name=~ s/[,\/#]/_/xg;
-		if ( ! defined (@{$l_1{$a_name}}) ) { 
-		    @{$l_1{$a_name}}=(); 
-		    #print("\n---ON-level:$pn-UNDEF:$a_name.---\n");
-		}
-		push(@{$l_1{$a_name}},$struct_num);
-	    }
-	    @parts=@parts[2-($#parts-1)];
-	    print(join(',',@parts));#:
-	    print("<- $struct_num \n");
-	}
-	### ENDINACTIVE
-
-	#my $name=shift(@parts);
-	# changed from the hard set order to one determined by tab sheet header
-	# uses a hash with col_header=position and pulls that from parts.
-	# then cuts down parts to just the level fields.
-	# i need to check for color information and pull that separately, as an alternative to value. 
-	my $name=$parts[$ontology_header_index{"Structure"}];
-	#my $Abbrev=shift(@parts);
-	my $Abbrev=$parts[$ontology_header_index{"Abbrev"}];
-	#my $value=pop(@parts);
-	my $value=$parts[$ontology_header_index{"Value"}];
-	my $color='NULL';
-	if ( not defined( $value ) ) {
-	    warn("NO Value $name");
-	    $value=100000;
-	}
-	if ( $#ontology_color_fields==3 ) { # the case this is fixes should NEVER happen, its just bugging out on test data.
-	    $color=join(@parts[@ontology_header_index{@ontology_color_fields}]);
-	}
-	@parts=@parts[@ontology_header_index{@ontology_label_fields}];
-	
-	#dump(@parts);
-	my ($a_fn,$c_fn,$f_fn)=('','','');
-	my (@a_path,@s_path,@f_path)=((),(),());
-# 		if ( ! -d './MoldelTree/'.join('/',@parts) ){
-# 		    print("mkdir './ModelTree/'.join('/',@parts)\n");
-# 		}
-	if ( 1) { 
-	    #print("#$Abbrev:$name\n");
-	    my $s_path='Static_Render/LabelModels';
-	    my $ref=\%onto_hash;
-	    my $parent_ref=$rootHierarchyNode;
-	    my @vtkMRMLModelDisplayNodes=mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
-	    my $model_display_template = \%{clone $vtkMRMLModelDisplayNodes[0]};
-	    my $parent_hierarchy_node_id=$rootHierarchyNodeID;
-	    my $hierarchy_template = \%{clone $parent_ref};
-	    #dump($hierarchy_template);
-	    #sleep_with_countdown(3);
-	    my $sort_val=$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}; # current count of modelhierarchy nodes
-	    #my $display_node_num=$#{$mrml_data->{"MRML"}->{"ModelDisplay"}};# was going to just set names like slicer does, but that would assume that slicer's vtkrMRMLModelDisplayNodes start numbering at 1/0. That is not a safe assumption. 
-	    $hierarchy_template->{"sortingValue"}=$sort_val;
-	    #for(my $pn=$#parts;$pn>=0;$pn--){
-	    #print("PARTS: '".join("' '",@parts)."'.\n");
-	    for(my $pn=0;$pn<=$#parts;$pn++){# proces the different levels of ontology, get the different ontology names, create a path to save the structure into.
-		#
-		my $branch_name=$parts[$pn];#meta structure name
-		#use String::Util qw(trim); $branch_name=trim($branch_name)
-		use Text::Trim qw(trim);
-		trim($branch_name);
-		#print("bn $branch_name\n");
-		if ( ( 0 )
-		     || ( not defined $branch_name ) 
-		     || ( $branch_name eq '' ) 
-		     || ( $branch_name =~ /^\s*$/ )
-		     || ( $branch_name eq '0' ) 
-		    ) {
-			 #|| ( $branch_name == 0 ) ) {
-		    warn("bad tree name, bailing on additional levels");
-		    #sleep_with_countdown(20);
-		    last; # drop out of the hierarchy builder
-		}
-		if ( $branch_name =~ /^[rmp]/x) {
-		    warn("\tAlex said to skip these structures");
-		    next;
-		}
-		if ( ( $branch_name =~ /_to_/x )
-		     || ($branch_name =~/_and_/x) ){
-		    warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
-		    ### 
-		    # @parts = $line =~ /([^\t]+)/gx;
-		    ###
-		    #my @b_parts= $branch_name =~ /(.*?)((:?_to_|_and_)(.*))*/gx; # this was a failure : (
-		    my @b_parts=split("_to_",$branch_name);
-		    my @b_parts2=split("_and_",$branch_name);
-		    if ($#b_parts<$#b_parts2) {
-			@b_parts=@b_parts2;
-			# We're a range, now we should set up the whole range;
-		    }
-		    print("branch: $branch_name ");
-		    dump(@b_parts);
-		    $branch_name=$b_parts[0];
-		}
-		
-		my $tnum="";
-		($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
-		$tnum="" unless defined $tnum;
-
-		#$branch_name=~ s/[,\/#]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
-		$branch_name=~ s/[,\/# ]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
-		$s_path="$s_path/$tnum$branch_name"; #add cleanname to subpath.
-		if ( ! defined (@{$l_1{$tnum.$branch_name}}) ) {
-		    @{$l_1{$tnum.$branch_name}}=();
-		    #print("\n---ON-level:$pn-UNDEF:$tnum$branch_name---\n");
-		}
-		if ( ! -d $s_path ){
-		    print("mkdir $s_path\n") if ($debug_val>=45);
-		    if ( $do_unsafe) {
-		    mkdir ($s_path);# oh yea, we can make_path instead...
-		    }
-		}
-
-		# look up in colortable structure.
-		#name= structure in color_table
-		#abbrev should be equivalent.
-		my $s_hash={};
-		if ( $c_table->{"Abbrev"}->{$Abbrev} ){
-		    $s_hash=$c_table->{"Abbrev"}->{$Abbrev};
-		} elsif ( $c_table->{"Structure"}->{$name} ) {
-		    $s_hash=$c_table->{"Structure"}->{$name};
-		}
-		if ( scalar($s_hash) > 0 ) {
-		    if ( exists($s_hash->{"Value"}) ){ 
-			$value=$s_hash->{"Value"}; 
-		    } else {
-			warn("color_table hash $Abbrev missing value.");
-		    }
-		}
-		push(@{$l_1{$tnum.$branch_name}},$value);
-		if ( ! defined $ref->{$tnum.$branch_name}) {# clever way to build hierarchy hash on fly. The hierarchy hash is just a holder for the structure. It is only used here to keep track of whether we've sceen this node before or not.
-		    my $spc=sprintf("  "x$pn);
-		    print("$spc $branch_name not there, adding ... \n") if ($debug_val>=25);
-		    $ref->{$tnum.$branch_name}={};
-		    # update template with values for this structure.
-		    $model_display_template->{"name"}=$branch_name."Display";
-		    $model_display_template->{"id"}=$tnum.$branch_name."Display";
-		    #$model_display_template->{"id"}="vtkMRMLModelDisplayNode".($hierarchy_template->{"sortingValue"}+1);
-		    $model_display_template->{"color"}=sprintf("%0.0f",rand(1))
-			." ".sprintf("%0.1f",rand(1))
-			." ".sprintf("%0.1f",rand(1));
-		    $model_display_template->{"visibility"}="false";
-		    $hierarchy_template->{"name"}=$branch_name;
-		    $hierarchy_template->{"id"}=$tnum.$branch_name;
-		    $hierarchy_template->{"parentNodeRef"}=$parent_hierarchy_node_id;
-		    $hierarchy_template->{"displayNodeID"}=$model_display_template->{"id"};
-		    $hierarchy_template->{"sortingValue"}=$hierarchy_template->{"sortingValue"}+1;
-		    $hierarchy_template->{"expanded"}="true";
-		    # now add the template to MRML->ModelHierarchy and MRML->SceneView->ModelHierarchy
-		    #push(@{$mrml_data->{"MRML"}->{"ModelHierarchy"}},%{clone $hierarchy_template});
-		    push(@{$mrml_data->{"MRML"}->{"ModelHierarchy"}},\%{clone $hierarchy_template});
-		    push(@{$mrml_data->{"MRML"}->{"ModelDisplay"}},\%{clone $model_display_template}); 
-		    push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"}},\%{clone $hierarchy_template});
-		    push(@{$mrml_data->{"MRML"}->{"SceneView"}->{"ModelDisplay"}},\%{clone $model_display_template});
-		    #@vtkMRMLHieraryNodes=mrml_attr_search($mrml_data,"associatedNodeRef",$rootHierarchyNodeID."\$","ModelHierarchy");
-		    # if the ref dont exist, we add it... hmm how/when do we set the type to vtkMRMLModelHierarchyNode?
-		    #printf("--template_val--");
-		    #dump($hierarchy_template);
-		    #dump($mrml_data->{"MRML"}->{"ModelHierarchy"});
-		    #dump($mrml_data->{"MRML"}->{"SceneView"}->{"ModelHierarchy"});
-		    #dump($mrml_data->{"MRML"}->{"ModelDisplay"});
-		    #dump($mrml_data->{"MRML"}->{"SceneView"}->{"ModelDisplay"});
-		}
-		#ast;
-		$ref=$ref->{$tnum.$branch_name}; # this is our destination point for our structure once we've ensured the whole hierarchy before it is built.
-		$parent_hierarchy_node_id=$tnum.$branch_name;
-		#print("."x$pn);
-		#print("\n");
-	    }
-
-	    my @mrml_nodes;
-	    my $alt_name=$name;
-	    my $storage_node_id="";
-	    my $storage_node={};
-	    my $node={};
-	    my $file_name="$model_prefix${value}_${alt_name}";
-	    {# safe but ugly name_handle
-		$alt_name=~ s/,[ ]/CMA/gx;
-		$alt_name=~ s/[ ]/SPC/gx;
-		$alt_name=~ s/,/CMA/gx;
-		$alt_name=~ s/\//FSLASH/gx;
-		$alt_name=~ s/\+/PLS/gx;
-		#$alt_name=~ s/\(/\\(/gx;
-		#$alt_name=~ s/\)/\\)/gx;
-		$c_fn=$alt_name;
-
-		###
-		# check ontology value in color_table, see that their name matches.
-		# THIS IS BOGUS NOW THAT OUR NAMES AND THE HIERARCHY HAVE FALLEN OUT OF DATE.
-		# value matching our ontology.
-		###
-		if(0){
-
-		for(my $ct_i=0;$ct_i<=$#color_table_lines;$ct_i++) { 
-		    my $cte=$color_table_lines[$ct_i];
-		    #print($cte);
-		    if ( $cte !~ /^#.*/ ) {
-			my @ct_entry=split(' ',$cte);
-			#print("ct:".join(" ",@ct_entry)."\n");
-			if ( $value == $ct_entry[0] &&  $#ct_entry>=4) { 
-			    if($alt_name ne $ct_entry[1]) {
-				print("COLOR_TABLE NAME FAILURE($value) generated : $alt_name, color_table $ct_entry[1]\n");
-			    }
-			    #$ct_entry[1]="$model_prefix${value}_$alt_name";
-			    $ct_entry[1]="$alt_name";
-			    #$color_table_lines[$ct_i]=join(@ct_entry,' ');
-			    $color_table_lines[$ct_i]=join(' ',@ct_entry)."\n";
-			}
-		    }
-		}}
-	    }
-	    
-	    ###
-	    # fix the name in our xml_out.
-	    ###
-	    # find any mrml nodes with name = alt name 
-	    # using the id from the model node,
-	    #   get the modelhierarchy that controls our location by looking at associateNodeRef = our id.
-	    # rename that modelhierarchy to alt_name,this didnt work, try again using v1_value_alt_name
-	    
-	    @mrml_nodes=mrml_find_by_name($mrml_data,$alt_name,"Model");
-	    if ( scalar @mrml_nodes !=1 ){
-		printf("MISSING $alt_name:".scalar @mrml_nodes."\n");
-		@mrml_nodes=mrml_find_by_name($mrml_data,($model_prefix.$value."_"),"Model"); 
-		printf("\t ${model_prefix}${value}_:".scalar @mrml_nodes."\n");
-		if ( scalar @mrml_nodes !=1 ){
-		    @mrml_nodes=mrml_find_by_name($mrml_data,($model_prefix.'[0-9]+_'.$Abbrev."__"),"Model");
-		    printf("\t $Abbrev:".scalar @mrml_nodes."\n");
-		# abbreviation alone isnt precise enough, adding model_prefix and proximate value, 
-		# adding a double underscore to eliminate false positives.
-		}
-		
-		if ( scalar @mrml_nodes !=1 ){
-		    print("\t wrong count after two tries!\n");
-		    next;
-		}
-	    }
-	    for(my $ri=0;$ri<$#mrml_nodes;$ri++){
-		if ( mrml_node_diff($mrml_nodes[$ri],$mrml_nodes[$ri+1]) ) { 
-		    warn("more nodes found than expected!($#mrml_nodes)".join(@mrml_nodes,' ')."\n");
-		    sleep_with_countdown(3);
-		}   
-	    }
-	    $node=$mrml_nodes[0];
-	    #display_complex_data_structure($node);
-	    my $node_id=$node->{"id"};
-	    if ( defined $node_id  ) {
-		my @mrmls_found=mrml_attr_search($mrml_data,"associatedNodeRef",$node_id."\$","ModelHierarchy");
-		$storage_node_id=$node->{"storageNodeRef"};
-		#print("found ".($#mrmls_found+1)." references to this node\n");
-		foreach my $mrml_node ( @mrmls_found){
-		    #print("change node $mrml_node->{id} $mrml_node->{name} to $alt_name\n");
-		    if($rename_type eq 'clean' ){
-			$mrml_node->{"name"}="$alt_name";
-		    } elsif($rename_type eq 'modelfile' ){
-			$mrml_node->{"name"}="$model_prefix${value}_$alt_name";
-			$node->{"name"}="$model_prefix${value}_$alt_name";
-		    } elsif( $rename_type eq 'ontology')  {
-			$mrml_node->{"name"}="$name";
-			$node->{"name"}="$name";
-		    } elsif( $rename_type eq 'Abbrev')  { 
-			$mrml_node->{"name"}="$Abbrev";
-			$node->{"name"}="$Abbrev";
-		    } else { 
-			$mrml_node->{"name"}="$model_prefix${value}_$alt_name";
-			$node->{"name"}="$model_prefix${value}_$alt_name";
-		    }
-		    $mrml_node->{"parentNodeRef"}=$parent_hierarchy_node_id;
-		}
-	    } else {
-		if (!scalar $node ){
-		    warn("OHh NOOOO node id not set ! Sleeping a bit while you look at this!");
-		    dump($node);
-		    sleep_with_countdown(15);
-		} else {
-		    warn("$alt_name not found!");
-		}
-		next;
-	    }
-	    my @s_nodes=mrml_attr_search($mrml_data,"id",$storage_node_id."\$","ModelStorage");
-	    $storage_node=$s_nodes[0];#close enough ; )
-	    my $file_src="Static_Render/ModelTree/$file_name.vtk";
-	    if ( scalar %{$storage_node} ) {
-		$file_src=$storage_node->{"fileName"};
-            } else {
-		warn("Using assumed source filename");
-	    }
-	    my $file_dest='Static_Render/ModelTree/'.join('/',@parts)."/$file_name.vtk";
-	    $file_dest="$s_path/$file_name.vtk";
-	    $file_dest=~ s/[ ]/_/gx;
-	    my @c_path=($file_src,$file_dest);
-	    if ( ! -f $file_dest) { 
-		if ( -e $file_src ) { 
-		    push(@c_name,$file_name.".vtk");
-		    print("mv $file_src $file_dest\n") if ($debug_val>=45);
-		    if ( $do_unsafe ) {
-			rename($file_src, $file_dest);
-		    }
-		} else {
-		    print ("\t #missing $file_src\n");
-		}
-	    } else {
-		#rename($file_dest,$file_src);
-		push(@c_n_found,$file_dest);
-		
-	    }
-	    if ( scalar %{$storage_node} && $do_unsafe) {
-		print("setting new file path in mrml\n");
-		$storage_node->{"fileName"}=$file_dest;
-	    }
-	    $ref->{$alt_name}=$value;
-	    
-	    if ( $process_Abbrev_names ) { #Abbrev name_handle
-		print("Abbrev name \n");
-		$alt_name=$Abbrev;
-		$alt_name=~ s/[ ]/_/gx;
-		$alt_name=~ s/,/_/gx;
-		$alt_name=~ s/\//_/gx;
-		$alt_name=~ s/\+/_/gx;
-		#$alt_name=~ s/\(/\\(/gx;
-		#$alt_name=~ s/\)/\\)/gx;
-		$a_fn=$alt_name;
-		$file_name="$model_prefix${value}_${alt_name}";
-		my $file_dest="Static_Render/LabelModels_Abbrev/$file_name.vtk";
-		@a_path=($file_src,$file_dest);
-		if ( ! -f $file_dest) {
-		    if ( -e $file_src ) { 
-			push(@d_Abbrev,$file_name.".vtk");
-			print("mv $file_src $file_dest\n");
-			if ( $do_unsafe ) {
-			    rename($file_src, $file_dest);
-			    if ( scalar %{$storage_node} ) {
-				$storage_node->{"fileName"}=$file_dest;
-			    }
-			}
-		    } else {
-			print ("\t #missing $file_src\n");
-		    }
-		    
-		} else {
-		    push(@d_a_found,$file_dest);
-		}
-	    }
-	    if ( $process_full_names ) {# full name_handle
-		print("Full name \n");
-		$alt_name=$name;
-		#$alt_name=~ s/[ ]/_/gx;
-		$alt_name=~ s/\/[^\s]+//gx;
-		$alt_name=~ s/,[ ]//gx;
-		$alt_name=~ s/,//gx;
-		
-		$alt_name=~ s/\+//gx;
-		#$alt_name=~ s/\(/\\(/gx;
-		#$alt_name=~ s/\)/\\)/gx;
-		#$f_fn=$alt_name;
-		$file_name="${alt_name}";
-		my $file_dest="Static_Render/LabelModels_full_names/$file_name.vtk";
-		my @f_path=($file_src,$file_dest);
-		if ( ! -f $file_dest) {
-		    if ( -e $file_src ) { 
-			push(@d_name,$file_name.".vtk");
-			print("mv $file_src $file_dest\n");
-			if ( $do_unsafe ) {
-			    rename($file_src, $file_dest);
-			    if ( scalar %{$storage_node} ) {
-				$storage_node->{"fileName"}=$file_dest;
-			    }
-			}
-		    } else {
-			print ("\t #missing $file_src\n");
-		    }
-		} else {
-		    push(@d_n_found,$file_dest);
-		}
-	    }
-	    # find the ref in the ontolgy mrml
-	}
-	
-    }
-    #for cn=1:$#ontology_sheet_columns,ontology_sheet_columns,push onto hash{colheader(cn)},parts(cn)
-    #print  SESAME_OUT $line;  # write out every line modified or not
-#    dump @parts;
-    #    last;
-    
-}
-
-#dump($mrml_data->{"MRML"}->{"ModelHierarchy"});
-#dump($mrml_data->{"MRML"}->{"ModelDisplay"});
-print("PROCESS SUMMARY\n".
-      "\ttotal_possiblities:$#ontology_csv, \n".
-      "\tcandidates available and unprocessed, \n".
-      "\t#unprocessed clean_names:$#c_name,\n".
-      "\t#unprocessed dirty_names:$#d_name,\n".
-      "\t#unprocessed dirty_Abbrevs:$#d_Abbrev\n".
-      "candidates found at dest\n".
-      "clean_names:$#c_n_found,\n".
-      "dirty_names:$#d_n_found,\n".
-      "dirty_Abbrevs:$#d_a_found\n");
-print(join(':',@ontology_sheet_columns)."\n");
-print('larger_level_structures >');
-my @list=keys(%l_1);
-for my $kn (@list)  {
-    my @s_list=@{$l_1{$kn}};
-    #print("\t$kn:$#{$l_1{$kn}}\n");
-    #print("($model_prefix".join('_|$model_prefix',@{$l_1{$kn}}),")\n");#elements regex
-}
-#display_complex_data_structure(\%onto_hash,'  ',0,'noleaves'); # noleaves doenst exactly work because some trees have twigs foreach leaf
-#display_complex_data_structure(\%onto_hash);
-
-#xml_write($mrml_data,$p_mrml_out_template)
-printf("ontology built\n");
-dump(%onto_hash);
-#dump(%l_1);
-sleep_with_countdown(3);
-   
-
-mrml_to_file($mrml_data,'  ',0,'pretty','',$p_mrml_out);
-if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq 'Abbrev') {
-    mrml_clear_nodes($mrml_data,("ModelHierarchy","ModelDisplay","Version", "UserTags"));
-    mrml_to_file($mrml_data,'  ',0,'pretty','',$p_mrml_out_template);
-    write_array_to_file($p_color_table_out,\@color_table_lines);
-}#$rename_type eq 'clean' ||
-#close SESAME_OUT; 
-
-# when you are sure this is working add... 
-# rename $outpath, $p_ontology_in;  # destroys p_ontology_in, change name of file f
-
-#    $cmd = "copy $ARGV[0] $ARGV[0].bak";
-#    system($cmd);
-#    $outpath=$ARGV[0].bak;
 
 
 
@@ -1739,9 +1209,8 @@ sub cleanup_ontology_levels {
 	}
 	# HERE WE SHOULD BE ABLE TO SEE PARTS
 	#dump(@onto_levels);
-	use List::MoreUtils qw(uniq);
 	@onto_levels=uniq(@onto_levels);
-	printf("\t".join("\n\t",@onto_levels)."\n");
+	printf("\t".join("\n\t",@onto_levels)."\n") if ($debug_val>45);
 	# onto_hash will have 4 parts.
 	# onto superstructures, branches with many leaves
 	# onto lines to superstructs, leaves with all possible branches.
@@ -1778,12 +1247,13 @@ sub cleanup_ontology_levels {
 	}
 	$super_struct_hash->{$super}=scalar(@{$onto_hash->{"SuperStructures"}->{$super}}); # this isnt right.
     }
+    $onto_hash->{"SuperCount"}=$super_struct_hash;
     #
     # sort keys of super hash descending.
     #
-    @super_structs = sort { $super_struct_hash->{$b} <=> $super_struct_hash->{$a} } keys(%$super_struct_hash);
+    @super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> 
+				$onto_hash->{"SuperCount"}->{$a} } keys(%{$onto_hash->{"SuperCount"}});
     my @potential_parents=();
-
     #
     # For every "branch" assume its a twig, and find potential parents.
     #
@@ -1793,31 +1263,53 @@ sub cleanup_ontology_levels {
     # This should allow us to check each previous one in turn, adding to the ontology in pieces.
     # Even furhter, we should check previous parents in reverse as we want the smallest match possible.
     $onto_hash->{"Hierarchy"}={};
+    #$debug_val=40;
+    print("Lineage Discovery\n");
+    
+    my $black_list={}; # Second pass structures.
+    my @orphans=();
     while(my $twig=shift(@super_structs) ){
 	$onto_hash->{"Branches"}->{$twig}={};
 	#dump(@potential_parents);
+	my $t_c=$onto_hash->{"SuperCount"}->{$twig};
+	print("  $twig:$t_c\n") if ($debug_val>40);
 	foreach my $pp (reverse(@potential_parents)) {
 	    #reverse to let us check the next biggest parent.
 	    # get parent element count
-	    my $p_c=$super_struct_hash->{$pp};
-	    if ($p_c>$super_struct_hash->{$twig} ){
-	    # if elementcount of child < elementcount of parent
+	    my $p_c=$onto_hash->{"SuperCount"}->{$pp};
+	    if ($p_c>$t_c){
+		print("\t$p_c <= $pp\n") if ($debug_val>40);
+		# if elementcount of child < elementcount of parent
 		#   get parent elements
 		my @p_e=@{$onto_hash->{"SuperStructures"}->{$pp}};
 		#   join parents into sorted string
 		my $par_leaves=join("_",sort(@p_e));
 		#   get child elements
 		my @t_e=@{$onto_hash->{"SuperStructures"}->{$twig}};
-		#   join children into regex
-		my $child_reg=join("(_.*_)|(_)",sort(@t_e));
+		#   join children into regex 
+		#my $child_reg=join("(_.*_)|(_)",sort(@t_e)); # this was wrong, it mached ANY single.
+		#my $child_reg="(^|_)".join("(_|([0-9]+_)+)",sort(@t_e))."($|_)";
+		#my $child_reg='(^|_)'.join('(_|(_[0-9]+_)+)',sort(@t_e)).'($|_)';# I THNK this child_reg almost does it. Probably need to do slightly better.
+		#my $child_reg=join('(_|(_[0-9]+_)+?)',sort(@t_e));
+		
 		# check if we're the same category of structure eg,  m, p, r
 		my ($pname,$pnum)=$pp=~ /^([^0-9]+)(.*)$/x ;
 		my ($tname,$tnum)=$twig=~ /^([^0-9]+)(.*)$/x ;
 		if ( $tname eq $pname ) {
+		    print("BAM TOO SIMILAR\n") if ($debug_val>40);
 		    next;
 		}
 		#   do our compare.
-		if ( $par_leaves=~/$child_reg/x ){
+		#if ( $par_leaves=~/$child_reg/x ){
+		my $child_match=1;
+		while(my $num= shift(@t_e) ) {
+		    my $regx='(^|_)'.$num.'($|_)';
+		    if ($par_leaves !~ /$regx/x) {
+			$child_match=0;
+			last;
+		    }
+		}
+		if ( $child_match ) {
 		    print("Best parent of $twig is $pp\n") if ($debug_val>=45);
 		    # add to hash....
 		    #if ( ! exists($onto_hash->{"Twigs"}->{$pp}) && exists($onto_hash->{"Branches"}->{$pp}) ) {
@@ -1831,27 +1323,46 @@ sub cleanup_ontology_levels {
 		    }
 		    if ( ! exists($onto_hash->{"Branches"}->{$pp}->{$twig} ) ){
 			$onto_hash->{"Branches"}->{$pp}->{$twig}=$onto_hash->{"Branches"}->{$twig};
-			if ( exists $onto_hash->{"Twigs"}->{$twig}->{$pp} ) {
+			#if ( exists $onto_hash->{"Twigs"}->{$twig}->{$pp} ) {
+			if ( exists($onto_hash->{"Twigs"}->{$twig}) ) {
 			    warn("Twig already has parent");
 			}
 			$onto_hash->{"Twigs"}->{$twig}->{$pp}=$pp;#$onto_hash->{"Branches"}->{$pp};
 		    }
 		    last;
 		}
+		#if ( scalar(@t_e)>60) {exit;}
 	    }
 	}
 	push(@potential_parents,$twig);
     }
+    # Do another pass, to catch any missing parent nodes.
+    if ($#super_structs>=0 ){
+	die("ERROR: PROCESSING INCOMPLETE");
+    }
+    @super_structs=keys(%{$onto_hash->{"SuperCount"}});
+    while(my $twig=shift(@super_structs) ){
+	if (    ! exists($onto_hash->{"Twigs"}->{$twig}) 
+		&& ! exists($onto_hash->{"Hierarchy"}->{$twig})
+		&&   exists($onto_hash->{"Branches"}->{$twig})  ) {
+	    print("Additional root $twig\n");
+	    $onto_hash->{"Hierarchy"}->{$twig}=$onto_hash->{"Branches"}->{$twig};
+	}
+    }
+    
+    #dump($black_list);
+    #dump(@orphans);
     #dump(%{$onto_hash->{"Branches"}});
-    #dump(%{$onto_hash->{"Hierarchy"}});
+    #dump(%{$onto_hash->{"Hierarchy"}});exit;
     #dump(%{$onto_hash->{"Twigs"}});
-
+    #exit;
     #Data->Dumper($onto_hash->{"Branches"});
     #use Data::Dumper;
     #Data::Dumper($onto_hash->{"Branches"});
     #display_complex_data_structure($onto_hash->{"Branches"});
-    #display_complex_data_structure($onto_hash->{"Hierarchy"});
+    display_complex_data_structure($onto_hash->{"Hierarchy"});
     #display_complex_data_structure($onto_hash->{"Twigs"});
+    #exit;
     #
     # Loop over all lines, pull out ontology levels
     #
@@ -1891,7 +1402,7 @@ sub cleanup_ontology_levels {
 	#dump(@h_keys);
 	##("test2", "test3", "test1")
 	#dump(@super_structs);
-	@super_structs = sort { $super_struct_hash->{$b} <=> $super_struct_hash->{$a} } @super_structs;
+	@super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> $onto_hash->{"SuperCount"}->{$a} } @super_structs;
 	#dump(@super_=
 	# 
 	# update current ontology entry with the correct level count.
@@ -1903,7 +1414,7 @@ sub cleanup_ontology_levels {
 	    #if(exists($o_entry->{sprintf("Level_%i",$ln+1)}) ) {
 	    my $level_string=sprintf("Level_%i",$ln);
 	    if ($ln>scalar(@super_structs)) {
-		print($o_entry->{"Name"}.": KILL LEVEL $level_string\n");
+		print($o_entry->{"Name"}.": KILL LEVEL $level_string\n") if ($debug_val>=45);
 		delete $o_entry->{$level_string};
 	    } else {
 		$o_entry->{$level_string}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
