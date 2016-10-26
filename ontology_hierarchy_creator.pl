@@ -73,7 +73,7 @@ my $p_mrml_out=$opt{"o"};
 my $rename_type=$opt{"t"};
 my $p_color_table_in=$opt{"c"};
 my $model_prefix="Model_";
-$debug_val=25;
+$debug_val=20;
 my $p_mrml_out_template;
 if ( ! defined $p_mrml_in || ! defined $p_color_table_in || ! defined $p_ontology_in ) { 
     print("specifiy at least:\n\t(-h hierarchical_ontology)\n\t(-m mrml)\n\t(-c color_table).\nOptionally specify\n\t(-o output mrml)\n\t(-t  rename type [Clean|Name|Structure|Abbrev])\n");
@@ -100,6 +100,8 @@ my $p_color_table_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 
 ($Tp,$Tn,$Te)=fileparts($p_ontology_in,2);
 my $p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
+my $p_ontology_structures_out=$Tp.$Tn."_".$rename_type."_Lists_out".$Te;
+my $p_ontology_structures_out_hf=$Tp.$Tn."_".$rename_type."_Lists_out.headfile";
 print "MRML = $p_mrml_in -> $p_mrml_out\n";
 print "Color = $p_color_table_in -> $p_color_table_out\n";
 print "Hierarchy = $p_ontology_in -> $p_ontology_out\n";
@@ -233,7 +235,7 @@ my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
 
 
 my $ontology;
-$ontology=cleanup_ontology_levels($o_table);
+$ontology=cleanup_ontology_levels($o_table,$c_table);
 # if (keys %{ $ontology } ) {
 #     print ("YES-keys\n");
 # }
@@ -264,8 +266,12 @@ my $ONTOLOGY_INSERTION_LINE=$o_count;# next insertion point.
 while ( exists($o_table->{"t_line"}->{$ONTOLOGY_INSERTION_LINE}) ){
     $ONTOLOGY_INSERTION_LINE++;
 }
-printf("Final ontology line number =$ONTOLOGY_INSERTION_LINE\n");
-
+printf("Final ontology line number =".($ONTOLOGY_INSERTION_LINE-1)."\n");
+my $COLOR_TABLE_INSERTION_LINE=$c_count;# next insertion point.
+while ( exists($o_table->{"t_line"}->{$COLOR_TABLE_INSERTION_LINE}) ){
+    $COLOR_TABLE_INSERTION_LINE++;
+}
+printf("Final color_table line number =".($COLOR_TABLE_INSERTION_LINE-1)."\n");
 #my $c_count=(scalar(keys %{$c_table->{"Structure"}}));# simple counts
 #my $o_count=(scalar(keys %{$o_table->{"Structure"}})); # simple counts
 print("color_table ".$c_count." lines loaded\n");
@@ -313,7 +319,7 @@ if (! keys %{ $rootHierarchyNode} ) {
 #my $mrml_data=mrml_find_by_name($mrml_data->{"MRML"},"whiteSPCmatter","ModelHierarchy");
 #my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter","ModelHierarchy");
 #my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter");#,"ModelHierarchy");
-#display_complex_data_structure($mrml_data,'  ','pretty');
+#display_complex_data_structure($mrml_data,'  ');
 #display_complex_data_structure(\@refs,'  ')
 
 my @mrml_nodes_loaded=mrml_find_by_id($mrml_data,".*"); # could i just scalar that for how i'm doing things?
@@ -353,8 +359,6 @@ foreach my $mrml_model (@mrml_nodes) {
     # the default splitter used for paxinos/alex(RBSC)'s labels shows lookup potentials of value, structure_full_avizo_name, Abbrev, Name.
     # ex. modelname Model_1_ABC__A_big_name_completely  becomes
     # value=1, structure_full_avizo_name=ABC__A_big_name_completely, Abbrev=ABC, Name=A_big_name_completely.
-
-
     my $mrml_name=$mrml_model->{"name"};
     my @field_keys=@{$splitter->{"Output"}};# get the count of expected elementes
     my @field_temp = $mrml_name  =~ /$splitter->{"Regex"}/x;
@@ -373,21 +377,39 @@ foreach my $mrml_model (@mrml_nodes) {
 	warn($msg." and couldnt recover");
 	next;
     }
-
+    if ( $n_a{"Value"}==0 ){ # this throws an error becuase it may not be numeric... but it works anyway.
+	dump(%n_a);
+	print("Special exception for value 0\n");
+	next;
+    }
     #### NEED TO ENSURE THE n_a HASH IS CORRECT HERE.
-    # theoritically we've run the cleanup function ensureing we're correct.
+    # theoritically we've run the cleanup function ensuring the ontology is correct.
     #
     # For poorly formed entries we can have unfilled or missing fields!
-    # 
-    
-    
+    #
+    # n_a only has Value as a trustworty field.
+    if(! exists($n_a{"Name"}) && exists($n_a{"Abbrev"}) ){
+	$n_a{"Name"}=$n_a{"Abbrev"};
+    }
+    if(exists($n_a{"Name"}) && ! exists($n_a{"Abbrev"}) ){
+	$n_a{"Abbrev"}=$n_a{"Name"};
+    }
+    if(!exists($n_a{"Name"})
+       || ! exists($n_a{"Value"})
+       || ! exists($n_a{"Abbrev"})
+       || ! exists($n_a{"Structure"}) ){
+	warn("Critical falure for model $mrml_name skipping...\n");
+	dump(%n_a);
+	sleep_with_countdown(15);
+	next;	
+    }
     ### 
-    # get the color_table info by abbrev, or value, or Name
+    # get the color_table info by value, name, abbrev, or structure
     ###
     # we sort throught the possible standard places it could be.
     # adding second chance via color lookup.
     my ($c_entry,$o_entry);
-    my @c_test=qw(Abbrev Value Name Structure); # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    my @c_test=qw(Value Name Abbrev Structure); # sets the test order, instead of just using the collection order of splitter->{'Output'}.
     my $tx;
     do {
 	$tx=shift(@c_test) ;
@@ -395,31 +417,31 @@ foreach my $mrml_model (@mrml_nodes) {
 	    && ! exists ($c_table->{$tx}->{$n_a{$tx}} )
 	    && $#c_test>0 );
     
-    if( defined $n_a{$tx} && exists ($c_table->{$tx}->{$n_a{$tx}}) ) {
+    if( exists($n_a{$tx}) && exists($c_table->{$tx}->{$n_a{$tx}}) ) {
 	$c_entry=$c_table->{$tx}->{$n_a{$tx}};
     } else {
 	print("$mrml_name\n\tERROR, No color table Entry found!\n");
 	push(@missing_model_messages,"No color table entry".$mrml_name);
-	dump(%n_a);
+	#dump(%n_a);
     }
     ### 
     # get the ontology_table info by abbrev, or value, or Name
     ###
     # we sort throught the possible standard places it could be.
     # adding second chance via color lookup.
-    my @o_test=qw(Abbrev Name Structure);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    my @o_test=qw(Value Abbrev Name Structure);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
     do {
 	$tx=shift(@o_test) ;
     } while(defined $n_a{$tx} 
 	    && ! exists ($o_table->{$tx}->{$n_a{$tx}} )
 	    && $#o_test>0 );
-    if( defined $n_a{$tx} && exists ($o_table->{$tx}->{$n_a{$tx}}) ) {
+    if( exists($n_a{$tx}) && exists($o_table->{$tx}->{$n_a{$tx}}) ) {
 	$o_entry=$o_table->{$tx}->{$n_a{$tx}};
     } else {
 	print("$mrml_name\n\tERROR, No ontology Entry found!\n");
 	if ( 1 ) {
 	    push(@missing_model_messages,"No ontology table entry: ".$mrml_name);
-	    dump(%n_a);	
+	    #dump(%n_a);	
 	} else {
 	    #### Harder try to find the ontology using the colors.
 	    if ( not defined($o_entry) ) {
@@ -457,49 +479,157 @@ foreach my $mrml_model (@mrml_nodes) {
     #
     if ( not defined($o_entry) || not defined ($c_entry) ) {
 	warn("Model $mrml_name missing ontology or color entries");
-	if ( scalar(keys(%$c_entry)) > 2) {
-	    print("FOUND C_ENTRY\n") if $debug_val>=35;
+	if ( ! defined($o_entry) && ! defined($c_entry) ) {
+	    warn("INVENTING INFORMATION for ".$mrml_name);
+	    $c_entry=\%{clone %n_a};
+	    $c_entry->{"t_line"}=$COLOR_TABLE_INSERTION_LINE;
+	    {
+		my @c_vals=qw(c_R c_G c_B);
+		#my @c_vals=qw(c_R c_G c_B);
+		@{$c_entry}{@c_vals}=(255) x scalar(@c_vals);
+		$c_entry->{"c_A"}=0;
+	    }
+	    my @c_columns=qw(Value Name Abbrev Structure t_line);
+	    for my $col (@c_columns) {
+		if ( ! exists($c_table->{$col}->{$c_entry->{$col}} ) ) {
+		    $c_table->{$col}->{$c_entry->{$col}}=$c_entry;
+		    printf("Added c_entry to index $col at $c_entry->{$col}\n");
+		} else {
+		    die("$col has entry for $c_entry->{$col}\n" ) ;
+		}
+		if ( ! exists($c_table->{$col}) ){ 
+		    die("c_table missing Index: $col\n");
+		}
+	    }
+	}
+	if ( ! defined($o_entry) && defined($c_entry) ) {
+	    print("FOUND C_ENTRY MISSING O_ENTRY\n") if $debug_val>=35;
 	    dump($c_entry) if $debug_val >= 35;
 	    # ADD the o_entry to the o_table here!!!
 	    # Hash_dupe!
 	    # structure abbrev level_1 .. level_n c_r c_g c_b c_a
 	    #	    $o_entry=
 	    $o_entry=\%{clone $c_entry};
+	    $o_entry->{"Level_1"}="UNSORTED";# they're all unsorted : )
+	    $o_entry->{"DirectAssignment"}=["UNSORTED"];# they're all unsorted : )
 	    $o_entry->{"t_line"}=$ONTOLOGY_INSERTION_LINE;
 	    $ONTOLOGY_INSERTION_LINE++;
 	    #@$o_entry{keys %$c_entry}=$c_entry->{keys %$c_entry};
 	    # now for each key in the o_table add a 0 to our o_entry, THEN add our o_entry to each point of the o_table.
-	    my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
-	    foreach (@o_columns) {
-		if ( ! exists($o_entry->{$_} ) ) {
-		    $o_entry->{$_}=0;
-		}
+	    my @o_columns;
+	    if ( 1 )  {
+		@o_columns=qw(Value Name Abbrev Structure t_line);
+	    } elsif ( 0 ) {
+		@o_columns=keys(%{$o_entry});
+	    } else {
+		@o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
+		foreach (@o_columns) {
+		    if ( ! exists($o_entry->{$_} ) ) {
+			$o_entry->{$_}=0;
+		    }
+		}	    
 	    }
-	    #for my $col (@o_columns) {
-	    my $col="t_line"; {
+	    # for each column update the ontology.
+	    for my $col (@o_columns) {
+	    #my $col="t_line"; {
 		if ( ! exists($o_table->{$col}->{$o_entry->{$col}} ) ) {
 		    $o_table->{$col}->{$o_entry->{$col}}=$o_entry;
 		    printf("Added o_entry to index $col at $o_entry->{$col}\n");
 		    #sleep_with_countdown(2);
 		} else {
-		    printf("$col has entry for $o_entry->{$col}\n" ) ;
+		    die("$col has entry for $o_entry->{$col}\n" ) ;
 		}
 		if ( ! exists($o_table->{$col}) ){ 
-		    warn("o_table missing Index: $col\n");
+		    die("o_table missing Index: $col\n");
 		}
 	    }
 	    #dump($o_entry);
 	}
-	if ( scalar(keys(%$o_entry)) > 2) {
-	    print("FOUND O_ENTRY\n") if $debug_val>=35;
+ 	if ( defined($o_entry) && ! defined($c_entry) ) {
+	    print("FOUND O_ENTRY MISSING C_ENTRY\n") if $debug_val>=35;
 	    dump($o_entry) if $debug_val>=35;
-	    # ADD the c_entry to the c_table here!!! 
+	    # ADD the c_entry to the c_table here!!!
+	    $c_entry=\%{clone $o_entry};
+	    my @c_columns=qw(Value Name Abbrev Structure t_line);
+	    for my $col (@c_columns) {
+	    #my $col="t_line"; {
+		if ( ! exists($c_table->{$col}->{$c_entry->{$col}} ) ) {
+		    $c_table->{$col}->{$c_entry->{$col}}=$c_entry;
+		    printf("Added c_entry to index $col at $c_entry->{$col}\n");
+		    #sleep_with_countdown(2);
+		} else {
+		    die("$col has entry for $c_entry->{$col}\n" ) ;
+		}
+		if ( ! exists($c_table->{$col}) ){ 
+		    die("c_table missing Index: $col\n");
+		}
+	    }
 	}
-	next;
+	#next;
     } else {
 	$processed_nodes++;
 	#dump($c_entry);
     }
+    #next;
+    ##TODO
+    # now that we've found our ontolgoy and color table entries Combine that info in all three data locations.
+    # n_a has these fields Value Structure Abbrev Name. Value must match in all cases.
+    # It should all ready match the color table.
+    # o_entry has Value Structure Abbrev Name and c_R c_G c_B c_A and Level 1 .. N.
+    # c_entry has Value Structure Abbrev Name and c_R c_G c_B c_A.
+    # 
+    # We must trust value on n_a
+    # We take for granted that n_a abbrev, name and structure could be different from either color table or ontology.
+    # We should trust the data of o_entry the most.
+    $o_entry->{"Value"}    =$n_a{"Value"};
+    
+    $c_entry->{"Value"}    =$o_entry->{"Value"};
+    $c_entry->{"Name"}     =$o_entry->{"Name"};
+    $c_entry->{"Abbrev"}   =$o_entry->{"Abbrev"};
+    $c_entry->{"Structure"}=$o_entry->{"Structure"};
+
+
+    if ( 0
+	 || $c_entry->{"Value"}==215
+	 || $c_entry->{"Value"}==634
+	 || $c_entry->{"Value"}==635
+	 || $c_entry->{"Value"}==761
+	 || $c_entry->{"Value"}==762
+	 || $c_entry->{"Value"}==764
+	 || $c_entry->{"Value"}==809
+	 || $c_entry->{"Value"}==811
+	){
+	if ( defined($o_entry) ) {
+	    dump($o_entry);}
+	if ( defined($c_entry) ) {
+	    dump($c_entry);}
+    }
+    #next;
+    if ( not defined($o_entry) ) {
+    	dump(%n_a);
+	if ( defined ($c_entry) ) {
+	    dump($c_entry ) ;}
+	if ( 0
+	     || $c_entry->{"Value"}==634
+	     || $c_entry->{"Value"}==635
+	     || $c_entry->{"Value"}==761
+	     || $c_entry->{"Value"}==762
+	     || $c_entry->{"Value"}==764
+	     || $c_entry->{"Value"}==799
+	     || $c_entry->{"Value"}==809
+	    ){
+	} else {
+	    #exit;
+	}
+    }
+    #next;
+    
+    
+    #if (! defined ($alt_name) ) {
+    #$alt_name=$Abbrev;
+    #$n_a{"Name"}=$Abbrev;
+    #}
+
     if ( 0) {#DISABLEDCURRENTLY
     my @c_vals=qw(c_R c_G c_B c_A Value);
     #my $o_entry=$o_table;
@@ -512,24 +642,25 @@ foreach my $mrml_model (@mrml_nodes) {
     @{$o_entry}{@c_vals}=@{$c_entry}{@c_vals};
     } #DISABLEDCURRENTLY
        
-    my $alt_name=$n_a{"Name"};
+    my $alt_name=$o_entry->{"Name"};
     #my $Abbrev=$n_a{"Abbrev"};
-    my $Abbrev=$c_entry->{"Abbrev"};
-    my $value=$c_entry->{"Value"};
-    if (! defined ($alt_name) ) {
-	$alt_name=$Abbrev;
-	$n_a{"Name"}=$Abbrev;
-    }
+    my $Abbrev  =$o_entry->{"Abbrev"};
+    my $value   =$o_entry->{"Value"};
     my $parent_hierarchy_node_id=$rootHierarchyNodeID;
     my $parent_ref=$rootHierarchyNode;
     my $model_display_template;
     my $hierarchy_template;
-    
+    if (! defined ($alt_name) ) { die("NAME FAILURE");}
     my @vtkMRMLModelDisplayNodes;
     #print("dumping right now just forstesting\n");dump ($parent_ref); exit;
     #mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
-    if ( defined ($parent_ref->{"displayNodeID"} ) ) {
-	@vtkMRMLModelDisplayNodes=mrml_attr_search( $mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
+
+    if ( exists ($mrml_model->{"displayNodeRef"} ) ) {
+	@vtkMRMLModelDisplayNodes=mrml_attr_search( $mrml_data,"id",'^'.$mrml_model->{"displayNodeRef"}.'$',"ModelDisplay");# this may not be what i'm looking to do.`
+    } elsif ( exists ($parent_ref->{"displayNodeID"} ) ) {
+	@vtkMRMLModelDisplayNodes=mrml_attr_search( $mrml_data,"id",$parent_ref->{"displayNodeID"}.'$',"ModelDisplay");    # this gets the root hierarchy node's modeldisplaynode.
+	warn("WARN: Using root display node for template.");
+	
     } else {
 	warn("WARN: Had to just grab the first ModelDisplay due to missing root");
 	# if we dont have a parent node, then just get the first one, hope its the right thing.
@@ -539,11 +670,15 @@ foreach my $mrml_model (@mrml_nodes) {
 	    die "Parent ref problem";
 	}
     }
-    
+    $vtkMRMLModelDisplayNodes[0]->{"opacity"}=0.7;
+    $vtkMRMLModelDisplayNodes[0]->{"visibility"}="false";
+    my @model_color=split(" ",$vtkMRMLModelDisplayNodes[0]->{"color"});
+    #$c_entry # could add this color to our color table in case its missing.
     $model_display_template = \%{clone $vtkMRMLModelDisplayNodes[0]};
     # could set any favored setting right here.
+    # decided to set it before we grab the template.
     # $model_display_template->{"THINGY"}=VALUEDESIRED;
-    $model_display_template->{"opacity"}="0.7";
+    #$model_display_template->{"opacity"}="0.7";
     #dump($model_display_template);
     $hierarchy_template = \%{clone $parent_ref};
     $hierarchy_template->{"expanded"}="false";
@@ -554,7 +689,7 @@ foreach my $mrml_model (@mrml_nodes) {
     #  while level_next exists, check for level, add it
     # grep {/Level_[0-9]+$/} keys %$o_entry;
     #dump($o_entry);
-    print("Getting ready to processnode $alt_name\n");
+    print("Getting ready to processnode $alt_name\n") if $debug_val>=25;
     print("Fetching levels for $alt_name") if $debug_val>=45;
     my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
     @parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
@@ -576,10 +711,19 @@ foreach my $mrml_model (@mrml_nodes) {
     my $ref;#=\%onto_hash;
     my @parent_hierarchy_names=($parts[$#parts]);# In simple mode, there is only one parent hierarchy name.
     if (keys %{ $ontology } ) {# if we're the new ontology in memory code.
-	@parent_hierarchy_names=@{$o_entry->{"DirectAssignment"}} ;
+	if (exists($o_entry->{"DirectAssignment"}) ) {
+	    @parent_hierarchy_names=@{$o_entry->{"DirectAssignment"}};
+	} else {
+    	    die("Bad structure, no entries in hierarchy. DirectAssignmentsNotSpecified");
+	}
+	if(scalar(@parent_hierarchy_names)<1 ) {
+	    die("Bad structure, no entries in hierarchy.");
+	} else {
+	    dump(@parent_hierarchy_names);
+	}
+	@parts=@parent_hierarchy_names;# for all direct assignments, get their parent.
 	#print ("YES-keys\n");
 	if ( scalar(@parent_hierarchy_names)>1 ){ 
-	    @parts=@parent_hierarchy_names;# for all direct assignments, get their parent.
 	    for my $assign (@parts) {
 		my $test=$assign;
 		while(exists( $ontology->{"Twigs"}->{$test} ) ){#while not a root node, add to list, and get ready to test next.
@@ -595,8 +739,9 @@ foreach my $mrml_model (@mrml_nodes) {
 	} else { print("\tSingleAssignment\n") if ($debug_val>=35);}
     }
     if (scalar(@parts)<1 ) {
-	die("NO PARTS TO ASSIGN");
+	die("NO PARTS TO ASSIGN ontology line:".$o_entry->{"t_line"}."\n");
     }
+    #dump(@parts);next;
     my $level_show_bool=0; # bool to show what levels we've got when this loop ends. This is used to show error messages.
     for(my $pn=0;$pn<=$#parts;$pn++){
 	# proccess the different levels of ontology, get the different ontology names, create a path to save the structure into.
@@ -703,7 +848,13 @@ foreach my $mrml_model (@mrml_nodes) {
 	    # update template with values for this structure.
 	    $model_display_template->{"name"}=$branch_name."_";
 	    $model_display_template->{"id"}=$part_node_display_id;
-	    if ( 1 ) { #FIXME #TODO #WHILE WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
+	    if ( 1 ) { #WHEN WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
+		# This grabs the first three letters of the branch name, so that its predictable, constant, and colored
+		my @nums=unpack("W*",$branch_name);
+		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
+							   ,$nums[0],$nums[1],$nums[2]);
+							   #,ord($branch_name[0]),ord($branch_name[1]),ord($branch_name[2]));
+	    } elsif( 0 ) { #WHEN WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
 		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
 							   ,0.25,0.25,0,25);
 	    } else {
@@ -778,14 +929,14 @@ foreach my $mrml_model (@mrml_nodes) {
 		warn("Bad node ");
 		dump($m_h_node);
 	    }
-	    if($rename_type eq 'clean' ){
+	    if($rename_type eq 'Clean' ){
 		$m_h_node->{"name"}="$alt_name";
 	    } elsif($rename_type eq 'Structure' ){ #was modelfile
 		$m_h_node->{"name"}="$model_prefix${value}_$alt_name";
 		$mrml_model->{"name"}="$model_prefix${value}_$alt_name";
 	    } elsif( $rename_type eq 'Name')  { #name?
-		$m_h_node->{"name"}="$mrml_name";
-		$mrml_model->{"name"}="$mrml_name";
+		$m_h_node->{"name"}="$alt_name";
+		$mrml_model->{"name"}="$alt_name";
 	    } elsif( $rename_type eq 'Abbrev')  { 
 		$m_h_node->{"name"}="$Abbrev";
 		$mrml_model->{"name"}="$Abbrev";
@@ -813,9 +964,10 @@ foreach my $mrml_model (@mrml_nodes) {
 		    #($grand_name) = keys(%{$ontology->{"Twigs"}->{$parent_name}});
 		#}
 		my $cur_node=$mrml_model;
+		$m_h_node->{"sortingValue"}=$processed_nodes;
 		if ($p_c>0) {
 		    $cur_node=\%{clone($mrml_model)};
-		    $m_h_node->{"sortingValue"}=$m_h_node->{"sortingValue"}+1;
+		    #$m_h_node->{"sortingValue"}=$m_h_node->{"sortingValue"}+1;
 		}
 		$cur_node->{"id"}=$parent_name.$m_m_base_id;
 		$m_h_node->{"parentNodeRef"}=$parent_name."Hierarchy";
@@ -885,7 +1037,7 @@ foreach my $mrml_model (@mrml_nodes) {
     if( 0 ) 
     {# safe but ugly name_handle
 	my( $alt_name,$c_fn);
-	    my $file_name="$model_prefix\[0-9]+_${alt_name}";
+	my $file_name="$model_prefix\[0-9]+_${alt_name}";
 	$alt_name=~ s/,[ ]/CMA/gx;
 	$alt_name=~ s/[ ]/SPC/gx;
 	$alt_name=~ s/,/CMA/gx;
@@ -897,7 +1049,7 @@ foreach my $mrml_model (@mrml_nodes) {
     }
 
 }
-print("processed $processed_nodes nodes\n");
+print("processed $processed_nodes/".scalar(@mrml_nodes)." nodes\n");
 dump(sort(@missing_model_messages));
 
 printf("ontology built\n");
@@ -915,20 +1067,23 @@ while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) )
     # we're trying to traverse the color table lines,
     # so while we have less outputs than inputs, AND we havent tried 200 more times 
     if ( exists($c_table->{"t_line"}->{$test_line}) ){
-	my $h_entry=$c_table->{"t_line"}->{$test_line};
+	my $c_entry=$c_table->{"t_line"}->{$test_line};
 	my $line;
 	foreach (@fields) {
-	    if (! exists $h_entry->{$_} ){
-		printf($h_entry->{"Name"}." missing $_\n");
-		$h_entry->{$_}=0;
+	    if (! exists $c_entry->{$_} ){
+		printf($c_entry->{"Name"}." missing $_\n");
+		$c_entry->{$_}=0;
 		}
 	}
-	$line=join(" ",@{$h_entry}{@fields})."\n";
+	$line=join(" ",@{$c_entry}{@fields})."\n";
 	push(@color_table_out,$line);
     }
     $test_line++;
 }
 write_array_to_file($p_color_table_out,\@color_table_out);
+#
+# Save ontology, and derrived listings
+#
 my @ontology_out=();
 #my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
 #@fields=qw(Structure Abbrev Level_1 Level_2 Level_3 Level_4 Value c_R c_G c_B c_A);# this was fine for the colortable as it had no header, but we can do better here.
@@ -936,7 +1091,7 @@ my @ontology_out=();
 #dump(%{$o_table->{"Header"}});#exit;
 # this is the hash converstion code lets use it to build an inverse hash.. 
 my %h_o_hash;@h_o_hash{values(%{$o_table->{"Header"}})}=keys(%{$o_table->{"Header"}});#dump(%h_o_hash);#exit;
-foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERCAL OR THIS WOULDNT WORK AS EXPECTED.
+foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERICAL OR THIS WOULDNT WORK AS EXPECTED.
     push(@fields,$h_o_hash{$idx});
 }
 #dump(@fields);exit;
@@ -949,43 +1104,138 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
     # we're trying to traverse the color table lines,
     # so while we have less outputs than inputs, AND we havent tried 200 more times 
     if ( exists($o_table->{"t_line"}->{$test_line}) ){
-	my $h_entry=$o_table->{"t_line"}->{$test_line};
-	my $c_entry=$c_table->{"Structure"}->{$h_entry->{"Structure"}};
-	if ( ! defined $c_entry ){
-	    my @c_vals=qw(c_R c_G c_B c_A);
-	    @{$h_entry}{@c_vals}=(255) x scalar(@c_vals);
-	    $h_entry->{"Value"}=0;
-	    print("Extranous ontology entry($h_entry->{Structure})!\n");
-	    #sleep_with_countdown(2);
+	my $o_entry=$o_table->{"t_line"}->{$test_line};
+	if ( 1 ) {
 	} else {
-	    my @c_vals=qw(c_R c_G c_B c_A Value);
-	    # set the o_entry color info to the c_table info.
-	    #dump(@{$c_entry}{@c_vals});
-	    @{$h_entry}{@c_vals}=@{$c_entry}{@c_vals};
+	    # my $c_entry;
+	    # if ( ! defined $c_entry ){
+	    # 	$c_entry=$c_table->{"Value"}->{$o_entry->{"Value"}};
+	    # 	if ( defined($c_entry) && $debug_val>=45) {
+	    # 	    print("\tcolor by Value\n");
+	    # 	}#dump($c_entry);}
+	    # }
+	    # if ( ! defined $c_entry ){
+	    # 	$c_entry=$c_table->{"Structure"}->{$o_entry->{"Structure"}};
+	    # 	if ( defined($c_entry) && $debug_val>=45) {
+	    # 	    print("\tcolor by Structure\n");
+	    # 	    dump($o_entry);dump($c_entry);}
+	    # }
+	    # if ( ! defined $c_entry ){
+	    # 	$c_entry=$c_table->{"Name"}->{$o_entry->{"Name"}};
+	    # 	if ( defined($c_entry) && $debug_val>=45) {
+	    # 	    print("\tcolor by Name\n");
+	    # 	    dump($o_entry);dump($c_entry);}
+	    # }
+	    # if ( ! defined $c_entry ){
+	    # 	$c_entry=$c_table->{"Abbrev"}->{$o_entry->{"Abbrev"}};
+	    # 	if ( defined($c_entry) && $debug_val>=45) {
+	    # 	    print("\tcolor by Abbrev\n");
+	    # 	    dump($o_entry);dump($c_entry);}
+	    # }
+	    
+	    # if ( 0
+	    # 	 || $o_entry->{"Value"}==215
+	    # 	 || $o_entry->{"Value"}==634
+	    # 	 || $o_entry->{"Value"}==635
+	    # 	 || $o_entry->{"Value"}==761
+	    # 	 || $o_entry->{"Value"}==762
+	    # 	 || $o_entry->{"Value"}==764
+	    # 	 || $o_entry->{"Value"}==809
+	    # 	 || $o_entry->{"Value"}==811
+	    # 	 || $o_entry->{"t_line"}>=818
+	    # 	){
+	    # 	if ( defined($o_entry) ) {
+	    # 	}#dump($o_entry);}
+	    # 	if ( defined($c_entry) ) {
+	    # 	}#dump($c_entry);}
+	    # }
+	    # #$test_line++;
+	    # #next;
+	    # if (0 && ! defined $c_entry ){
+	    # 	my @c_vals=qw(c_R c_G c_B c_A);
+	    # 	#my @c_vals=qw(c_R c_G c_B);
+	    # 	@{$o_entry}{@c_vals}=(255) x scalar(@c_vals);
+	    # 	$o_entry->{"c_A"}=0;
+	    # 	$o_entry->{"Value"}=0;
+	    # 	print("Extranous ontology entry($o_entry->{Structure}:$o_entry->{t_line})!\n");
+	    # 	#sleep_with_countdown(2);
+	    # } else {
+	    # 	my @c_vals=qw(c_R c_G c_B c_A Value);
+	    # 	# set the o_entry color info to the c_table info.
+	    # 	#dump(@{$c_entry}{@c_vals});
+	    # 	@{$o_entry}{@c_vals}=@{$c_entry}{@c_vals};
+	    # }
 	}
-
-	
 	my $line;
 	my @values;
+	my @bv_msg;
 	for (my $vn=0;$vn<=$#fields;$vn++){
-	    my $val=$h_entry->{$fields[$vn]};
+	    my $val=$o_entry->{$fields[$vn]};
 	    if (! defined($val) ) {
 		$val="";
-	    } elsif( my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ) {
-		# IF we match this regex 
+	    } elsif( $fields[$vn] =~/^Level_[0-9]+$/x ) {
+		my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ;
+		# If our value starts with number_
 		if ( (  defined($onum ) && defined($name)) 
 		     &&(length($onum)>0 && length($name)>0) ) {
+		    push(@bv_msg,"$fields[$vn]:$val ->$name");
 		    $val=$name;
 		}
 	    }
 	    push(@values,$val);
 	}
-	$line=join("\t",@values)."\n";	    
+	if (scalar($#bv_msg)>0 ){
+	    print("DIRTY VALUE DETECTED... $o_entry->{t_line} ".join(", ",@bv_msg)."\n");
+	    #sleep_with_countdown(3);
+	}
+	$line=join("\t",@values)."\n";
     	push(@ontology_out,$line);
     }
     $test_line++;
 }
 write_array_to_file($p_ontology_out,\@ontology_out);
+
+my @super_structures_out=();
+my @super_structures_hf=();
+my @su_header=qw(Name Values);
+push(@super_structures_out,join("\t",@su_header)."\n");
+push(@super_structures_hf,"#".join("\t",@su_header)."\n");
+my @super_structs=keys(%{$ontology->{"SuperStructures"}});
+@super_structs = sort { $ontology->{"SuperCount"}->{$b} <=> 
+			    $ontology->{"SuperCount"}->{$a} } keys(%{$ontology->{"SuperCount"}});
+for my $super(@super_structs) {
+    my @val_input=@{$ontology->{"SuperStructures"}->{$super}};
+    my @val_output;
+    if ( $super eq "r3"
+	 || $super eq "r4"
+	){
+	#dump(@val_input);#next;
+    }
+    while (my $line_num=shift(@val_input)) {
+	if ( exists($o_table->{"t_line"}->{$line_num})
+	     &&  exists($o_table->{"t_line"}->{$line_num}->{"Value"})
+	     &&  $o_table->{"t_line"}->{$line_num}->{"Value"} !=0 ) {
+	    push(@val_output,$o_table->{"t_line"}->{$line_num}->{"Value"});
+	} elsif ( exists($o_table->{"t_line"}->{$line_num}->{"Value"}) ) {
+		print("$super line $line_num broken_value.\n");
+		##dump($o_table->{"t_line"}->{$line_num});
+	} else {
+	    print("$super line $line_num removed\n");
+	}
+    }
+    #sort {$a<=>$b}
+    @val_output=sort {$a<=>$b} (@val_output);# force numerical sort using the curly brace stuff
+    #my $line=join("\t",$super,join(",",@val_output)."\n"); 
+    my $line=sprintf("%s\t%s\n",$super,join("\t",@val_output)); 
+    push(@super_structures_out,$line);
+    $line=sprintf("%s=%i:1,%s\n",$super,scalar(@val_output),join(" ",@val_output)); 
+    push(@super_structures_hf,$line);
+}
+print("Writing meta structure componenets sheet $p_ontology_structures_out\n");
+write_array_to_file($p_ontology_structures_out,\@super_structures_out);
+print("Writing meta structure componenets headfile $p_ontology_structures_out_hf\n");
+write_array_to_file($p_ontology_structures_out_hf,\@super_structures_hf);
+
 
 exit;exit;exit;
 exit;exit;exit;
@@ -995,70 +1245,289 @@ exit;exit;exit;
 
 sub cleanup_ontology_levels {
     # This is a cleanup function, to make sure bad ontology data doesnt pollute what we're doing later on.
-    # it needst o take the onotology hash table, and turn it into a hierarchical structure.
+    # it needs to take the onotology hash table, and turn it into a hierarchical structure.
     #
     # Plan is to do this in two passes. First pass operates on each line of ontology; 
     # it ensures unique structure names/abbreviations/value, and adds levels to a listing of seen super structures.
     # The second pass goes through the seen super structures and tries to find their parent structure.
-    my ($o_table)=@_;
+    #
+    # Actual end point has us do several different passes over first the lines of the ontologly, then over the discovered structures. 
+    my ($o_table,$c_table)=@_;
     my $onto_hash={}; #$onto_hash->{"test"}="foo";
-    # onto_hash will have 4 parts.
-    # onto SuperStructures, branches with many leaves, by their line number
-    # onto num_lookup, the superstructures with their ordering number if they've got one. Only the first number found will be used for any group.
-    # onto line_to_struct, lookup of linenumber and to SuperStructure
-    # onto branches, once we have the other two components we'll try to back calculate the ontology lookup.
+    # onto_hash will have several parts.
+    # onto SuperStructures, this is each discovered meta structure with any 
+    #                       assigned leaves by the leaf line number.
+    # onto order_lookup, the discovered meta structures with their ordering 
+    #                    number if they've got one. Only the first number 
+    #                    found will be used for any group.
+    # onto SuperCount, the discovered meta structures with their leaf count.
+    # onto line_to_struct, lookup of linenumber to assigned SuperStructure, 
+    #                    the inverse of SuperStructures.
+    # onto Branches, once we have the SuperStructures and the SuperCount we 
+    #                create the branches, this is the tree, without the leaves.
+    # onto Twigs, as we generate the branches, whenever we discover a  
+    #             particular structure has a parent its added to the twig  
+    #             listing, this is a lookup of twigname -> parent name=parent name.
+    # onto Hierarchy, any branch without a parent is a root hierarchy node, 
+    #                 these are added here so that we can dump the hierarchy 
+    #                 and see the full tree we've built.
     
     my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
     #dump(@o_columns); #dump($o_table->{$o_columns[0]}); # a worse version of the commented test.
     #dump($o_table->{"t_line"}); # test that we have contents by line in our table.
-    my $seen={};
-    $seen->{"Value"}={};
-    $seen->{"Structure"}={};
-    $seen->{"Abbrev"}={};
-    $seen->{"Name"}={};
-    my @onto_errors=();
-    my @onto_error_msgs=();
-    foreach (keys( %{$o_table->{"t_line"}}) ) {
-    	#dump($_);
-	#dump(ref $_);
-	my $o_entry=$o_table->{"t_line"}->{$_};
-	# TODO: get the keys, make sure they are all part of the ontology header.
-	#%{$o_table->{'Header'}}; 
-	#dump($o_entry);
-	#dump(ref $o_entry);
-
+    my $seen={}; # a hash of the expectedly unique keys of the hash.
+    $seen->{"Value"}={};     # 
+    $seen->{"Structure"}={}; #
+    $seen->{"Abbrev"}={};    #
+    $seen->{"Name"}={};      #
+    $seen->{"t_line"}={};    # by definition this should be unique, but we'll check anyway.
+    my @onto_errors=();      # linenumbers of error.
+    my @onto_error_msgs=();  # error messages generated as we process. To be displayed once we've looked at all lines.
+    my $blank_entry; # blank entry.
+    @{$blank_entry}{keys(%{$o_table->{"Header"}})}=(0) x scalar(keys(%{$o_table->{"Header"}}));#dump($blank_entry);exit;
+    $blank_entry->{"Name"}=0;
+    
+    for my $onto_line (keys( %{$o_table->{"t_line"}}) ) {
+	#$onto_line=817;
+	my $o_entry=$o_table->{"t_line"}->{$onto_line};
+	
 	#
-	# error check our o_entry ( duplicates ).
+	# error check for blank entry.
+	#
+	my @b_ignore=grep(/join(|,keys(%$o_entry))/,keys(%$blank_entry));
+	push(@b_ignore,"t_line");
+	my $b_test=compare_onto_lines($blank_entry,$o_entry,@b_ignore);
+	if(@b_ignore>1 ){
+	    dump(@b_ignore);
+	    sleep_with_countdown(3);
+	}
+	if ( ! keys %{ $b_test} ) {
+	    print("BOGUS LINE $onto_line\n");dump($o_entry);remove_onto_line($o_table,$onto_line); next;}
+	else {
+	    print("Not blank $onto_line\n");
+	    
+	    dump($b_test);#exit;
+	}
+	
+	#
+	# error check our o_entry for duplication.
 	#
 	my @error_fields=();
+	my @conflicts;
 	for my $check_field (keys(%$seen)) {
-	    if ( ! exists($seen->{$check_field}->{$o_entry->{$check_field}})  ){
-		push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$_);#$o_entry->{$check_field});
-		#$seen->{$check_field}->{$o_entry->{$check_field}} = ($o_entry->{$check_field});
+	    if ( ! exists($seen->{$check_field}->{$o_entry->{$check_field}})){ 
+		# not seen, no prob.
+		# $seen->{$check_field}->{$o_entry->{$check_field}} = ($o_entry->{$check_field});
 	    } else {
-		push(@onto_errors,$seen->{$check_field}->{$o_entry->{$check_field}});
-		push(@onto_error_msgs,"ERROR duplicate ontology $check_field line ".$o_entry->{"t_line"}.".");
-		push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$o_entry->{"t_line"});#$o_entry->{$check_field});
-		push(@error_fields,$check_field);
+		# Seen before, add conflicting line_numbers to the conflict list
+		push(@conflicts,@{$seen->{$check_field}->{$o_entry->{$check_field}}}); 
+		if ($check_field ne "Value" || $o_entry->{"Value"} != 0 ) {
+		    # add to error listing ONLY when its not value==0.
+		    push(@onto_errors,$seen->{$check_field}->{$o_entry->{$check_field}});
+		    push(@onto_error_msgs,"ERROR duplicate ontology $check_field. Line ".
+			 $o_entry->{"t_line"}." prev_count:".scalar(@{$seen->{$check_field}->{$o_entry->{$check_field}}}).".");
+		    push(@error_fields,$check_field);
+		}
+	    }
+	    push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$o_entry->{"t_line"}); # add to seen arrays.
+	}
+	@conflicts=uniq(@conflicts); # for many dupe fields the same line could be reported again
+	my $auto_res=0;
+	my $check_count=scalar(@conflicts);
+	my $c_num=0;
+	print("testing $o_entry->{t_line} ... ".join(" ",@conflicts)."\n") if ($check_count>0);
+	while ($c_num<$check_count) {
+	    my $conflict=shift(@conflicts);$c_num++;
+	    if ( ! exists($o_table->{"t_line"}->{$o_entry->{"t_line"}}) ) {
+		#print("AUTO_RES: Cur bogus\n");# we were removed
+		print("$o_entry->{t_line} removed");
+		$auto_res++;
+		last;
+	    }
+	    my $alt_entry=$o_table->{"t_line"}->{$conflict};
+	    my $test_status={};# a hasn to store which value is more likely correct.
+	    #                    will add 1 to values for alt, and subtract one for current.
+	    my $diff_=compare_onto_lines($o_entry,$alt_entry,qw(t_line));#,qw(c_R c_G c_B c_A t_line));
+	    # value handling....
+	    #if ( $
+	    # @ignoreH{@ignore} = ();
+	    # if ( scalar(@{$diff_})>0 ){
+	    if (keys %{ $diff_} ) {
+		# There were differences.
+		# Is the color bogus(for either).
+		my $c_test;
+		#$c_test->{"Value"}=0;
+		$c_test->{"c_R"}=255;
+		$c_test->{"c_G"}=255;
+		$c_test->{"c_B"}=255;
+		# test o_entry color
+		my @ignore=grep(!/join(|,keys(%$c_test))/,keys(%$o_entry));
+		my $cur_d=compare_onto_lines($c_test,$o_entry,@ignore);
+		my @bogus_color=(0,0);
+		if ( ! keys %{ $cur_d} ) {
+		    $bogus_color[0]=1;}
+		# test alt_entry color
+		@ignore=grep(!/join(|,keys($c_test))/,keys(%$alt_entry));
+		$cur_d=compare_onto_lines($c_test,$alt_entry,@ignore);
+		if ( ! keys %{ $cur_d} ) {
+		    $bogus_color[1]=1;}
+		my $v_err=0; # how many 0 values do we have.
+		if ( $o_entry->{"Value"}==0 ) {
+		    $v_err++;}
+		if ( $alt_entry->{"Value"}==0 ){
+		    $v_err++;}
+		if ( $v_err!=2 ) { # One value is good.
+		    if (! exists($diff_->{"Abbrev"})
+			&& ! exists($diff_->{"Name"}) ) {
+			# name and abbrev are the same, so we have some kinda clear winner.
+			if ( $o_entry->{"Value"}!=0 && ! $bogus_color[0] && $bogus_color[1]) {
+			    print("AUTO_RES: Alt bogus\n");
+			    remove_onto_line($o_table,$alt_entry->{"t_line"});
+			    $auto_res++;
+			} elsif ( $o_entry->{"Value"}==0 && $bogus_color[0] && ! $bogus_color[1]) {
+			    print("AUTO_RES: Cur bogus\n");
+			    remove_onto_line($o_table,$o_entry->{"t_line"});
+			    $auto_res++;
+			    last;
+			} else {
+			    #no clear winnner
+			}
+			
+		    }
+		}  else {# both values are bogus,
+		    if( exists($diff_->{"Abbrev"})      # and so is abbrev
+			&& exists($diff_->{"Name"}) ) { # and name
+			next;
+		    }
+		}
+		# and name or abbrev are bougs.
+		# Check if its our lovely value difference.
+		if (exists($diff_->{"Value"})      # value is diff
+		    && ! exists($diff_->{"Abbrev"})# but abbrev
+		    && ! exists($diff_->{"Name"})  # and name are not
+		    #&& ! exists($diff_->{"Structure"})
+		    ) {
+		    # If The value is different but name/abbrev/structure are the same
+   		    if ($bogus_color[0] ){
+			# DELETE CURRENT
+			print("AUTO_RES: Current bogus\n");
+			remove_onto_line($o_table,$o_entry->{"t_line"});
+			next; # and skip to next line
+		    } elsif($bogus_color[1] ){
+			# DLETE ALT
+			print("AUTO_RES: Alt bogus\n");
+			remove_onto_line($o_table,$alt_entry->{"t_line"});
+			$auto_res++;
+		    } else {
+			# COLOR NOT BOGUS, VALUE DIFFERENT ABBREV/NAME/STRUCTURE SAME
+			# i dont think we have this caes, but just in case we do
+			#push(@conflicts,$alt_entry->{"t_line"});
+		    }
+		    if ( exists($diff_->{"Abbrev"}) 
+			 && exists($diff_->{"Name"})
+			 && exists($diff_->{"Structure"})
+			) {
+			# if Value/name/abbrev/structure are diff... do nothing.
+			#
+			print("Seriously wanky difference here, got eat it.\n");
+		    } elsif (0 
+			     ||exists($diff_->{"c_R"})
+			     ||exists($diff_->{"c_G"})
+			     ||exists($diff_->{"c_B"})
+			     ||exists($diff_->{"c_A"})){
+			# if its any color element
+			if ($alt_entry->{"c_R"} ) {
+			    #
+			}
+		    }
+		} elsif (! exists($diff_->{"Value"}) ) { # value is same, name or abbrev are not.
+		    # If The value is different but name/abbrev/structure are the same
+   		    if ($bogus_color[0] && $o_entry->{"Value"}==0){ #val same, but not 0
+			# DELETE CURRENT
+			#print("AUTO_RES: Current bogus\n");
+			#remove_onto_line($o_entry->{"t_line"});
+			#next; # and skip to next line
+		    } elsif($bogus_color[1] && $alt_entry->{"Value"}==0 ){#val same, but not 0
+			# DLETE ALT
+			#print("AUTO_RES: Alt bogus\n");
+			#remove_onto_line($alt_entry->{"t_line"});
+			#$auto_res++;
+		    } else {
+			# COLOR NOT BOGUS, VALUE DIFFERENT ABBREV/NAME/STRUCTURE SAME
+			# i dont think we have this caes, but just in case we do
+			#push(@conflicts,$alt_entry->{"t_line"});
+		    }
+		}
+		push(@conflicts,$alt_entry->{"t_line"});
+		
+		#display_diff($diff_);
+		# dump(%$diff_);
+		# display_complex_data_structure($diff_,"  ",0);#,'  ','pretty');
+		# my @v = values(%{$diff_});
+		# (s:(<):($1/t):) for @v;
+		# my @k = keys(%{$diff_});
+		# print($o_entry->{"t_line"}." ".$conflict." - \t(".join(") (",zip(@v,@k)).")\n");
+		# print($o_entry->{"t_line"}." ".$conflict." - \t".join(" ",zip(@{values(%{$diff_})},@{keys(%{$diff_})}))."\n"); 
+		# dump(@$diff_);
+		
+	    } else {
+		# NO differing keys of interest
+		#print("Strange DIFF result for $_ from and $conflict\n");
+		print("No change in relevant keys... SO, check DIFF result for $o_entry->{t_line} from and $conflict\n");
+		# we'll get this for exact same results.
+		#dump($diff_);
 	    }
 	}
-	if(scalar(@error_fields)==1) {# there's only one error for this entry,
+	print("fixed $auto_res with ".scalar(@conflicts)." remaining.\n") if (scalar(@conflicts)>0||$auto_res>0);
+	if(scalar(@conflicts)>=1) {
+	    my $temp_lineN=$o_entry->{"t_line"};
+	    print("----$temp_lineN----\n");
+	    display_complex_data_structure($o_table->{"t_line"}->{$temp_lineN});
+	    print("--------\n");
+	    
+	    for $temp_lineN(@conflicts){
+		print("----$temp_lineN----\n");
+		display_complex_data_structure($o_table->{"t_line"}->{$temp_lineN});
+		print("--------\n");
+	    }
+	    #my $best_line=get_user_response("Which of these conflicting numbers looks better?");
+	    my $best_line;
+	    if (length($best_line)>0){ # if we were given a better number, else leave them all.
+		push(@conflicts,$o_entry->{"t_line"});
+		while(scalar(@conflicts)>1){
+		    my $temp_lineN=shift(@conflicts);
+		    if ($best_line != $temp_lineN) {
+			remove_onto_line($temp_lineN);
+		    }
+		}
+	    }
+	}
+	#next;
+	
+	if( scalar(@error_fields)==1) {# there's only one error for this entry,
+
 	    if ( $error_fields[0] eq "Abbrev" ) { # and its in the Abbreviation.
 		# Then we can fix this, note these two steps MUST be peformed in this order.
 		# First; 
 		# Get first t_line.
-		my $first_line=$seen->{"Abbrev"}->{$o_entry->{"Abbrev"}}[0];
-		# MIGHT want to do the minimum t_line instead of just the first one found, what with hashes not having guarnteed order and all. 
-		#dump($first_line);
-		my $first_entry=$o_table->{"t_line"}->{$first_line};
+		my $first_line_num=$seen->{"Abbrev"}->{$o_entry->{"Abbrev"}}[0];
+		# MIGHT want to do the minimum t_line instead of just the first one found,
+		# what with hashes not having guarnteed order and all. 
+		my $first_entry=$o_table->{"t_line"}->{$first_line_num};
 		# Fix the lookup table.
 		$o_table->{"Abbrev"}->{$first_entry->{"Abbrev"}}=$first_entry;
 		# Second;
 		# Fix our personal entry, set abbreviation to name. 
 		$o_entry->{"Abbrev"}=$o_entry->{"Name"};
 		push(@onto_error_msgs,"\t ".$o_entry->{"t_line"}." Fixed by dumping the abbreviation");
+		
+	    } elsif ( $error_fields[0] eq "Value" ) { # and its in the Abbreviation.
+		
 	    }
+	} else {
+	    
 	}
+	
 	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
 	#my @parts=@o_columns;
 	@parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
@@ -1075,6 +1544,7 @@ sub cleanup_ontology_levels {
 	} else {
 	    @parts=();
 	}
+	#sleep_with_countdown(15);
 	#
 	# Get ontology levels and assign structure to the different levels in the ultra meta hash.
 	#
@@ -1108,21 +1578,16 @@ sub cleanup_ontology_levels {
 	    }
 	    if ( ( $branch_name =~ /_to_/x )
 		 || ($branch_name =~/_and_/x) ){
-		#warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
-		### 
-		# @parts = $line =~ /([^\t]+)/gx;
-		###
-		#my @b_parts= $branch_name =~ /(.*?)((:?_to_|_and_)(.*))*/gx; # this was a failure : (
 		if ( ( $branch_name =~ /_to_/x )
 		     && ($branch_name =~/_and_/x) ) {
-		    die("WOW Really trying to get me arnt you!");
+		    die("WOW Really trying to get me arnt you! ontology_line:$o_entry->{t_line}.");
 		}
 		my @b_parts=split("_and_",$branch_name);
 		# foreach b_part convert _ to space, and then trim to clean up erroneous underscores.
 		my @tmp=();
 		# THIS ALL FEELS SO CLUNKY, THERE MUST BE A MORE PERLY, CLEAVER WAY
 		while ( my $b_and =shift(@b_parts)) {
-		    $_=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
+		    $b_and=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
 		    #if ( $b_and =~ /_to_/x ) {
 		    #    die("WOW Really trying to get me arnt you!");			
 		    #}
@@ -1152,7 +1617,8 @@ sub cleanup_ontology_levels {
 			    } else {
 				push(@range,-1);
 			    }
-			    if ( defined $base ) { $bname=$base;} else { die("range error");}
+			    if ( defined $base ) { $bname=$base;} else { 
+				die("range error ontology line:".$o_entry->{"t_line"}."\n");}
 			}
 			#dump(@b_endpoints);
 			#printf("$bname%i ",($range[0] .. $range[1]));
@@ -1179,7 +1645,7 @@ sub cleanup_ontology_levels {
 		    }
 		}
 	    } else {
-		if ($o_entry->{"t_line"}==51 ){
+		if (0 && $o_entry->{"t_line"}==51 ){ # line 51 was a multi_line in the past, that'll probably change.
 		    print($o_entry->{"Name"}.": tnum=$tnum,branch_name=$branch_name\n");
 		}
 		# foreach onto_level add tnum to the tnum lookup
@@ -1198,9 +1664,6 @@ sub cleanup_ontology_levels {
 		    }
 		}
 	    }
-	    #my $tnum="";
-	    #($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
-	    #$tnum="" unless defined $tnum;
 	    if  ( 0 
 		  && $branch_name =~ /^[rmp][0-9]{1,2}(?:[^\w]+[\w]*)?$/x) {
 		warn("\tAlex said to skip these structures($branch_name)");
@@ -1208,10 +1671,11 @@ sub cleanup_ontology_levels {
 	    }
 	}
 	# HERE WE SHOULD BE ABLE TO SEE PARTS
-	#dump(@onto_levels);
+	dump(@onto_levels);
+	#sleep_with_countdown(15);
 	@onto_levels=uniq(@onto_levels);
 	printf("\t".join("\n\t",@onto_levels)."\n") if ($debug_val>45);
-	# onto_hash will have 4 parts.
+	# onto_hash will have at least 4 parts.
 	# onto superstructures, branches with many leaves
 	# onto lines to superstructs, leaves with all possible branches.
 	foreach (@onto_levels){
@@ -1227,6 +1691,7 @@ sub cleanup_ontology_levels {
 	warn (join("\n",@onto_error_msgs));
     }
     #dump(@onto_errors);
+    #exit;
     #dump($onto_hash);
 
     # NOW WE NEED TO RE_CREATE THE BRANCHES.
@@ -1254,6 +1719,8 @@ sub cleanup_ontology_levels {
     @super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> 
 				$onto_hash->{"SuperCount"}->{$a} } keys(%{$onto_hash->{"SuperCount"}});
     my @potential_parents=();
+    #dump($onto_hash);
+    #sleep_with_countdown(15);
     #
     # For every "branch" assume its a twig, and find potential parents.
     #
@@ -1390,6 +1857,7 @@ sub cleanup_ontology_levels {
     # adding direct assignments array for branches which have valid twigs.
     # so we know which twigs a leaf belongs to in the main code.
     my $max_levels=1;
+    my $err_stop=0;
     foreach (keys( %{$o_table->{"t_line"}}) ) {
 	my $o_entry=$o_table->{"t_line"}->{$_};
 	#    for each superstructure of the line,
@@ -1403,10 +1871,58 @@ sub cleanup_ontology_levels {
 	##("test2", "test3", "test1")
 	#dump(@super_structs);
 	@super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> $onto_hash->{"SuperCount"}->{$a} } @super_structs;
-	#dump(@super_=
+
+
+
 	# 
 	# update current ontology entry with the correct level count.
 	#
+	# need to refactor this to make up a min level arrangement.i
+    if ( 1 ) {
+	# We're gonna make a hash of levels for this structure, then add it back to the ontology.
+	# super_structs is currently a descending list of the structures we're a part of.
+	my $l_hash={};
+	# so, for each super structure, 
+	for my $super (@super_structs) {
+	    #we should get their ancestor count. That is their level.
+	    my $super_level=1;
+	    my $par=$super;
+	    while(exists($onto_hash->{"Twigs"}->{$par}) ) {
+		($par)=keys(%{$onto_hash->{"Twigs"}->{$par}});
+		$super_level++;
+	    }
+	    my $l_name=sprintf("Level_%i",$super_level);
+	    printf("%s -> %s\n",$super,$l_name);
+	    push(@{$l_hash->{$l_name}},$super);
+	}
+	#dump($o_entry->{"Name"});
+	#dump($l_hash);
+	#exit;
+	my $cur_depth=scalar(keys %{$l_hash});
+	if($max_levels<$cur_depth) {
+	    $max_levels=$cur_depth;
+	}
+	for(my $ln=1;$ln<=$cur_depth||exists($o_entry->{sprintf("Level_%i",$ln)});$ln++){
+	    #if(exists($o_entry->{sprintf("Level_%i",$ln+1)}) ) {
+	    my $level_string=sprintf("Level_%i",$ln);
+	    if ($ln>$cur_depth) {
+		print($o_entry->{"Name"}.": KILL LEVEL $level_string\n") if ($debug_val>=45);
+		delete $o_entry->{$level_string};
+	    } else {
+		#$o_entry->{$level_string}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
+		if ( exists ( $l_hash->{$level_string} ) ) {
+		    $o_entry->{$level_string}=join(",",@{$l_hash->{$level_string}});
+		} else {
+		    die("BOOM BADHASH $level_string");
+		}
+		   
+		    #$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
+	    }
+	}
+	#dump($o_entry);
+	#exit;
+        } else {
+	# need to refactor this to make up a min level arrangement.
 	if($max_levels<scalar(@super_structs)){
 	    $max_levels=scalar(@super_structs);
 	}
@@ -1420,6 +1936,8 @@ sub cleanup_ontology_levels {
 		$o_entry->{$level_string}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
 	    }
 	}
+        }
+
 	#
 	# make direct assignment list for this structure.
 	#
@@ -1444,16 +1962,16 @@ sub cleanup_ontology_levels {
 	#
 	my $err_t="";
 	if( ! scalar(@direct_assignments) ) {
+	    $err_stop=1;
 	    $err_t="Err Line: ".$o_entry->{"t_line"}." ".join(",",@super_structs).")";
 	    my $t_hash;
 	    for my $structure(@super_structs) {
 		$t_hash->{$structure}=$onto_hash->{"Branches"}->{$structure};
 	    }
-	    
 	    dump(@super_structs);
 	    display_complex_data_structure($t_hash);
 	}
-	if ( $debug_val>=40){
+	if ( $debug_val>=25){
 	    printf("%s %i/%i ( %s)%s.\n",
 		   $o_entry->{"Name"},
 		   scalar(@direct_assignments),scalar(@super_structs),
@@ -1462,10 +1980,14 @@ sub cleanup_ontology_levels {
 	}
 	if( scalar(@direct_assignments) > 0 ) {
 	    $o_entry->{"DirectAssignment"}=\@direct_assignments;
+	} else {
+	    dump($o_entry);
+	    die("No assignments made!");
 	}
-	
-	    
 	#dump($o_entry);
+    }
+    if ($err_stop){
+	die("Error understanding ontology table, see above.");
     }
     #
     # Re-write header of o_table.
@@ -1491,3 +2013,103 @@ sub cleanup_ontology_levels {
     return $onto_hash;
 }
 
+sub compare_onto_lines {
+    # compares two hashes and an optional ignore list, returning the differing keys, or [<|>]key  for missing keys 
+    my ($l_1, $l_2,@ignore_list)=@_;
+
+    
+    my @comp_keys=uniq((keys(%{$l_1}),keys(%{$l_2})));
+    my %ignore;
+    if(scalar(@ignore_list)){#if has elements.
+	#print("Ignoring Some.. ");
+	#sleep_with_countdown(5);
+	@ignore{@ignore_list}=();
+    }
+    my $diff_={};# my $differing_keys=[];
+    foreach (@comp_keys){
+	if ( ! exists($ignore{$_} ) ){# if not an ignore key
+	    if (! exists($l_1->{$_}) ) {
+		$diff_->{$_}='>';#push(@{$differing_keys},'>'.$_);
+	    } elsif (! exists( $l_2->{$_}) ) {
+		$diff_->{$_}='<';#push(@{$differing_keys},'<'.$_);
+	    } elsif ($l_1->{$_} ne $l_2->{$_}){
+		$diff_->{$_}='|';#push(@{$differing_keys},$_);
+	    } else {
+		#$diff_->{$_}='=';#push(@{$differing_keys},$_);
+	    }
+	}
+    }
+    return $diff_; #return $differing_keys;
+}
+
+sub display_diff {
+    my ($diff_)=@_;
+    foreach (sort(keys %{$diff_})){
+	# three parts to a display line,
+	# part 1 is either the key or an indent
+	# part 2 is the value
+	# part 3 is either they key or nothing.
+	my @parts;
+	if ( $diff_->{$_} eq '>' ) {
+	    @parts=("\t",$diff_->{$_},$_);
+	#} elsif( $diff_->{$_} eq '<' ) {
+	    #@parts=($_,$diff_->{$_});
+	} else {
+	    @parts=($_,"\t".$diff_->{$_});
+	}
+	print(join(" ",@parts)."\n");
+    }
+    return;
+}
+
+sub remove_onto_line {
+    my ($o_table,$line_num)=@_;
+    #dump($o_table);exit;
+    if (! exists($o_table->{"t_line"}->{$line_num}) ) {
+	print("missing: $line_num!\n");
+	return;
+    } else {
+	print("REMOVING: $line_num!\n");
+	sleep_with_countdown(2);
+    }
+    my $hash_=$o_table->{"t_line"}->{$line_num};
+    my @kv=keys(%{$hash_});
+    foreach (@kv) {
+	if (exists ( $o_table->{$_}->{$_}) 
+	    &&  $o_table->{$_}->{$_} eq $hash_ ){
+	    print("Will remove $_ : $hash_->{$_}");
+	    #delete $o_table->{$_}->{$_}; # remove current line
+	}
+    }
+    delete $o_table->{"t_line"}->{$hash_->{"t_line"}}; # remove current line
+    return; 
+}
+
+sub prompt_example {
+    print "Can you read this? ";
+    my $answer = <STDIN>;
+    if ($answer =~ /^y(?:es)?$/i)
+    {
+	print "Excellent\n";
+    }
+    else
+    {
+	print "Then how did you answer?\n";
+    }
+}
+
+sub get_user_response {
+    my($msg)=@_;
+    print "$msg";
+    my $answer = <STDIN>;
+    chomp($answer);
+    return $answer;
+    if ( 0 ) {
+    if ($answer =~ /^y(?:es)?$/i) {
+	print "Excellent\n";
+    } else {
+	print "Then how did you answer?\n";
+    }}
+    
+}
+exit;
