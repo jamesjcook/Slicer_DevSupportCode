@@ -101,6 +101,8 @@ my $p_color_table_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 ($Tp,$Tn,$Te)=fileparts($p_ontology_in,2);
 my $p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 my $p_ontology_structures_out=$Tp.$Tn."_".$rename_type."_Lists_out".$Te;
+my $p_ontology_levels_out=$Tp.$Tn."_".$rename_type."_Levels_out".$Te;
+my $p_ontology_assignment_out=$Tp.$Tn."_".$rename_type."_assignment_out".$Te;
 my $p_ontology_structures_out_hf=$Tp.$Tn."_".$rename_type."_Lists_out.headfile";
 print "MRML = $p_mrml_in -> $p_mrml_out\n";
 print "Color = $p_color_table_in -> $p_color_table_out\n";
@@ -163,7 +165,7 @@ my $c_table=text_sheet_utils::loader($p_color_table_in,$header);
 #dump($c_table);
 
 ### BIG PILE OF DEBUG PRINTS CONTROLELD BY THIS TRIPLICATE VARIABLE, TURN ANY ON TO DUMP SPECIFIED CONTENTS AND STOP.
-my ($d_abr,$d_nam,$d_str)=(0,0,0);
+my ($d_abr,$d_nam,$d_str,$d_line)=(0,0,0,0);
 my $Tr;
 if ($d_abr){
     print STDERR ("Dump color:abbrev\n");
@@ -180,12 +182,18 @@ if ($d_str){
     $Tr=$c_table->{"Structure"};
     dump($Tr);
 }
-if ($d_abr||$d_nam||$d_str){
+if ($d_line){
+    print STDERR ("Dump color:structure\n");
+    $Tr=$c_table->{"t_line"};
+    dump($Tr);
+}
+if ($d_abr||$d_nam||$d_str||$d_line){
     $Tr=$c_table->{"t_line"};
     printf("%i\n",scalar(keys %{$c_table->{"t_line"}}));
     printf("%i\n",scalar(keys %$c_table));
+    exit;
 }
-	#exit;
+	#
 #my $parser=xml_read($p_mrml_in);
 #my $mrml_data=xml_read($p_mrml_in);
     #print("THE END\n");exit;
@@ -567,7 +575,6 @@ foreach my $mrml_model (@mrml_nodes) {
 	}
 	#next;
     } else {
-	$processed_nodes++;
 	#dump($c_entry);
     }
     #next;
@@ -692,7 +699,7 @@ foreach my $mrml_model (@mrml_nodes) {
     print("Getting ready to processnode $alt_name\n") if $debug_val>=25;
     print("Fetching levels for $alt_name") if $debug_val>=45;
     my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
-    @parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+    @parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
     if (scalar(@parts)>0 ) {
 	print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
 	#dump(%$o_entry); # this works.
@@ -850,10 +857,19 @@ foreach my $mrml_model (@mrml_nodes) {
 	    $model_display_template->{"id"}=$part_node_display_id;
 	    if ( 1 ) { #WHEN WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
 		# This grabs the first three letters of the branch name, so that its predictable, constant, and colored
+		# This is a rather goofy way to handle the constant color issue, slicer color is 0-1 so we divide by 255 since thats normal char range.
 		my @nums=unpack("W*",$branch_name);
-		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
-							   ,$nums[0],$nums[1],$nums[2]);
-							   #,ord($branch_name[0]),ord($branch_name[1]),ord($branch_name[2]));
+		push @nums, 128 x ( 3 - @nums ) ;# ensure nums is at least 3 big.
+		#@nums=@nums[0..2]; $_ /= 255 for @nums;# works with unin int warning THE WARNING WAS FOR SHORT STRUCTURES
+		my @tmp=@nums;
+		@nums=@nums[0..2]; $_ = int($_)/255 foreach @nums;
+		# first element only...
+		#$model_display_template->{"color"}=sprintf("%0.0f ",@nums);
+		#$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f",
+		$model_display_template->{"color"}=sprintf("%f %f %f",
+							   #,rand(1),rand(1),rand(1));
+							   $nums[0],$nums[1],$nums[2]);
+		#,$nums[0]/255,$nums[1]/255,$nums[2]/255);
 	    } elsif( 0 ) { #WHEN WE'RE TESTING WE WANT CONSTANT COLOR FOR INVENTED STRUCTURES SO I CAN DO A DIFF.
 		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
 							   ,0.25,0.25,0,25);
@@ -1047,7 +1063,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	#$alt_name=~ s/\)/\\)/gx;
 	$c_fn=$alt_name;
     }
-
+    $processed_nodes++;
 }
 print("processed $processed_nodes/".scalar(@mrml_nodes)." nodes\n");
 dump(sort(@missing_model_messages));
@@ -1236,6 +1252,94 @@ write_array_to_file($p_ontology_structures_out,\@super_structures_out);
 print("Writing meta structure componenets headfile $p_ontology_structures_out_hf\n");
 write_array_to_file($p_ontology_structures_out_hf,\@super_structures_hf);
 
+#sub lptr {
+#{
+#    my ($big_onto,$tree)=@_;
+my @level_election=();
+@fields=();
+%h_o_hash=();
+@h_o_hash{values(%{$ontology->{"SuperLevel"}->{"Header"}})}=keys(%{$ontology->{"SuperLevel"}->{"Header"}});
+dump(%h_o_hash);#exit;
+foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERICAL OR THIS WOULDNT WORK AS EXPECTED.
+    push(@fields,$h_o_hash{$idx});
+}
+#dump(@fields);exit;
+push(@level_election,join("\t",@fields)."\tBestLevel\n");
+printf("Dumping new ontology levels to \n");
+for my $super(@super_structs) {
+    # for all stuper structures, get their level votes, add the "BEST guess" column which is level of their highest count.
+
+    my $l_entry=$ontology->{"SuperLevel"}->{$super};
+    
+    #if ( exists($o_table->{"t_line"}->{$test_line}) ){
+    #my $o_entry=$o_table->{"t_line"}->{$test_line};
+    my $line;
+    my @values;
+    #my @bv_msg;
+    my $max_found=0;
+    my $best_level=0;
+    for (my $vn=0;$vn<=$#fields;$vn++){
+	my $val=$l_entry->{$fields[$vn]};
+	if (! defined($val) ) {
+	    $val=0;
+	} 
+	if( $fields[$vn] =~/^Level_[0-9]+$/x ) {
+	    if ($val>$max_found) {
+		$max_found=$val;
+		$best_level=$fields[$vn];
+	    }
+	    #my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ;
+	    # If our value starts with number_
+	    #if ( (  defined($onum ) && defined($name)) 
+	    #&&(length($onum)>0 && length($name)>0) ) {
+	    #push(@bv_msg,"$fields[$vn]:$val ->$name");
+	    #$val=$name;
+	    #}
+	}
+	push(@values,$val);
+    }
+    push(@values,$best_level);
+    $line=join("\t",@values)."\n";
+    push(@level_election,$line);
+    #}
+}
+write_array_to_file($p_ontology_levels_out,\@level_election);
+#}
+
+#
+# dump the lines_to_struct info for debugging.
+#
+my @assignment_list=();
+my @lines=sort {$a<=>$b} (keys(%{$ontology->{"line_to_struct"}}));
+for my $line_num(@lines){
+    if (exists($o_table->{"t_line"}->{$line_num}) ) {
+	my $o_entry=$o_table->{"t_line"}->{$line_num};
+	my @super_out;
+	if (   exists($o_entry->{"Value"})
+	       &&  $o_entry->{"Value"} !=0 ) {
+	    #@super_out=@{$ontology->{"line_to_struct"}->{"$line_num"}};
+	    if ( exists($ontology->{"line_to_struct"}->{"$line_num"}) ) {
+		@super_out=@{$ontology->{"line_to_struct"}->{"$line_num"}};
+	    } else {
+		warn("Odd, no direct assignments for $o_entry->{t_line}");
+		dump($o_entry);
+	    }
+	    unshift(@super_out,scalar(@super_out));
+	    my $line=sprintf("%s\t%s\n",$o_entry->{"Value"},join("\t",@super_out)); 
+	    push(@assignment_list,$line);#print($line);
+	} elsif ( exists($o_entry->{"Value"}) ) {
+	    print("line $line_num broken_value.\n");
+	} else {
+	    warn("line $line_num invalid.");
+	}
+    } else {
+	print("line $line_num removed\n");
+    }
+}
+
+print("Writing structure assignments debug info $p_ontology_assignment_out\n");
+write_array_to_file($p_ontology_assignment_out,\@assignment_list);
+
 
 exit;exit;exit;
 exit;exit;exit;
@@ -1261,6 +1365,8 @@ sub cleanup_ontology_levels {
     #                    number if they've got one. Only the first number 
     #                    found will be used for any group.
     # onto SuperCount, the discovered meta structures with their leaf count.
+    # onto SuperLevel, the discovered meta struccutres, and a vote count to 
+    #                   set which level a particular structure should be on from the leaves result.
     # onto line_to_struct, lookup of linenumber to assigned SuperStructure, 
     #                    the inverse of SuperStructures.
     # onto Branches, once we have the SuperStructures and the SuperCount we 
@@ -1304,9 +1410,8 @@ sub cleanup_ontology_levels {
 	if ( ! keys %{ $b_test} ) {
 	    print("BOGUS LINE $onto_line\n");dump($o_entry);remove_onto_line($o_table,$onto_line); next;}
 	else {
-	    print("Not blank $onto_line\n");
-	    
-	    dump($b_test);#exit;
+	    #print("Not blank $onto_line\n");
+	    #dump($b_test);#exit;
 	}
 	
 	#
@@ -1505,7 +1610,6 @@ sub cleanup_ontology_levels {
 	#next;
 	
 	if( scalar(@error_fields)==1) {# there's only one error for this entry,
-
 	    if ( $error_fields[0] eq "Abbrev" ) { # and its in the Abbreviation.
 		# Then we can fix this, note these two steps MUST be peformed in this order.
 		# First; 
@@ -1522,15 +1626,13 @@ sub cleanup_ontology_levels {
 		push(@onto_error_msgs,"\t ".$o_entry->{"t_line"}." Fixed by dumping the abbreviation");
 		
 	    } elsif ( $error_fields[0] eq "Value" ) { # and its in the Abbreviation.
-		
 	    }
 	} else {
-	    
-	}
+    	}
 	
 	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
 	#my @parts=@o_columns;
-	@parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
 	if (scalar(@parts)>0 ) {
 	    print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
 	    #dump(%$o_entry); # this works.
@@ -1540,11 +1642,23 @@ sub cleanup_ontology_levels {
 	    #dump($o_entry->{@parts});# this is undef
 	    #dump(@$o_entry->{@parts});# not an array reference
 	    #dump(@$o_entry{@parts});# THIS WORKS!
-	    @parts=@{$o_entry}{@parts}; # Now get the values at each present level. 
+	    @parts=@{$o_entry}{@parts}; # Now get the values at each present level.
+	    #IF there is only one part, AND its bogus!
+	    if ( scalar(@parts)==1 ) {
+		if (  ( not defined $parts[0] ) 
+		      || ( $parts[0] eq '' ) 
+		      || ( $parts[0] =~ /^\s*$/ )
+		      || ( $parts[0] eq '0' ) 
+		    ) {
+		    warn("");
+		    @parts=("UNSORTED");# at a minimum, they have unsorted....
+		} 
+	    }	    
 	} else {
-	    @parts=();
+	    warn("NO Proper keys for line $o_entry->{t_line} using UNSORTED");
+	    @parts=("UNSORTED");# at a minimum, they have unsorted....
+	    sleep_with_countdown(2);
 	}
-	#sleep_with_countdown(15);
 	#
 	# Get ontology levels and assign structure to the different levels in the ultra meta hash.
 	#
@@ -1839,7 +1953,7 @@ sub cleanup_ontology_levels {
 	my $o_entry=$o_table->{"t_line"}->{$_};
 	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
 	#my @parts=@o_columns;
-	@parts=grep {/Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
 	for(my $pn=0;$pn<=$#parts;$pn++){
 	    # process the different levels of ontology, get the different ontology names.
 	    my $branch_name=$parts[$pn]; # meta structure name
@@ -1893,7 +2007,14 @@ sub cleanup_ontology_levels {
 	    }
 	    my $l_name=sprintf("Level_%i",$super_level);
 	    printf("%s -> %s\n",$super,$l_name);
+	    # here we can vote for our result superlevel
 	    push(@{$l_hash->{$l_name}},$super);
+	    if(exists($onto_hash->{"SuperLevel"}->{$super}->{$l_name}) ) {
+		$onto_hash->{"SuperLevel"}->{$super}->{$l_name}++;
+	    } else {
+		$onto_hash->{"SuperLevel"}->{$super}->{"Name"}=$super;
+		$onto_hash->{"SuperLevel"}->{$super}->{$l_name}=1;
+	    }
 	}
 	#dump($o_entry->{"Name"});
 	#dump($l_hash);
@@ -1915,8 +2036,8 @@ sub cleanup_ontology_levels {
 		} else {
 		    die("BOOM BADHASH $level_string");
 		}
-		   
-		    #$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
+		
+		#$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
 	    }
 	}
 	#dump($o_entry);
@@ -1941,18 +2062,21 @@ sub cleanup_ontology_levels {
 	#
 	# make direct assignment list for this structure.
 	#
+	# this clears super_structs, and selectively adds to direct_assignments.
+	# looks like this may fail when there's only one assignment.
 	my @direct_assignments;
 	for(my $s_c=0;$s_c<=$#super_structs;$s_c++){
 	    my $cur=shift(@super_structs);
-	    my $fail_status=0;
+	    my $found_on_branch=0;
+	    #print("Test cur $cur\n");
 	    for my $test_struct (@super_structs){
 		if ( exists($onto_hash->{"Branches"}->{$cur}->{$test_struct}) ){
 		    print("Found $test_struct as part of $cur\n") if ($debug_val>40);
-		    $fail_status=1;
+		    $found_on_branch=1;
 		    last;
 		}
 	    }
-	    if ( ! $fail_status ) {
+	    if ( ! $found_on_branch ) {
 		push(@direct_assignments,$cur);
 	    }
 	    push(@super_structs,$cur);# Add tested struct to end of list
@@ -1971,6 +2095,7 @@ sub cleanup_ontology_levels {
 	    dump(@super_structs);
 	    display_complex_data_structure($t_hash);
 	}
+	#local $debug_val=40;
 	if ( $debug_val>=25){
 	    printf("%s %i/%i ( %s)%s.\n",
 		   $o_entry->{"Name"},
@@ -1989,6 +2114,7 @@ sub cleanup_ontology_levels {
     if ($err_stop){
 	die("Error understanding ontology table, see above.");
     }
+    
     #
     # Re-write header of o_table.
     #
@@ -1999,16 +2125,22 @@ sub cleanup_ontology_levels {
     }
     my $field_count=0;
     my @sorted_order = sort { $o_table->{'Header'}->{$a} <=> $o_table->{'Header'}->{$b} } keys(%{$o_table->{'Header'}});
-    #dump(%{$o_table->{'Header'}});
     $field_count=$#sorted_order;
-    @{$o_table->{'Header'}}{@sorted_order}=(0 .. $field_count);
-    #dump(%{$o_table->{'Header'}});
+    @{$o_table->{'Header'}}{@sorted_order}=(0 .. $field_count); # assigns new ording to existing columns from 1 to field count.
+    
     for($ln=1;$ln<=$max_levels;$ln++){
 	$o_table->{'Header'}->{sprintf("Level_%i",$ln)}=$ln+$field_count;
     }
-    #dump(%{$o_table->{'Header'}});
-    #dump($o_table->{"Name"});
-    
+    #
+    # Add header entry to the superlevel structure.
+    #
+    #dump $onto_hash->{"SuperLevel"};
+    $field_count=0;
+    $onto_hash->{"SuperLevel"}->{"Header"}->{"Name"}=0;
+    for($ln=1;$ln<=$max_levels;$ln++){
+	$onto_hash->{"SuperLevel"}->{'Header'}->{sprintf("Level_%i",$ln)}=$ln+$field_count;
+    }
+    #dump($onto_hash->{"SuperLevel"}->{"Header"});exit;
     #exit;
     return $onto_hash;
 }
@@ -2070,7 +2202,7 @@ sub remove_onto_line {
 	return;
     } else {
 	print("REMOVING: $line_num!\n");
-	sleep_with_countdown(2);
+	#sleep_with_countdown(2);
     }
     my $hash_=$o_table->{"t_line"}->{$line_num};
     my @kv=keys(%{$hash_});
