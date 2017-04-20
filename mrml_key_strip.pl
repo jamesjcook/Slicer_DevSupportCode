@@ -52,7 +52,7 @@ if ( ! defined $rename_type ) {
     $rename_type='modelfile';
 }
 {
-    my ($n,$p,$e)=fileparts($inmrml);
+    my ($p,$n,$e)=fileparts($inmrml,2);
     if ($rename_type eq 'clean' ) { 
 	$outmrml=$p.$n."_template".$e if ( ! defined $outmrml ) ;
 	$outmrml_n=$p.$n."_mhn".$e;
