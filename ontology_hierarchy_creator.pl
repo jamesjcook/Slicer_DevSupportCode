@@ -1668,6 +1668,11 @@ sub cleanup_ontology_levels {
 	    # process the different levels of ontology, get the different ontology names.
 	    # clean them up and put them into the onto_levels list.
 	    my $branch_name=$parts[$pn]; # meta structure name
+	    if (! defined $branch_name ){
+		# we dont have this level if its undefined.
+		#die ("undef branch $pn");
+		next;
+	    }
 	    trim($branch_name);
 	    my $tnum="";
 	    ($tnum,$branch_name)= $branch_name =~/^([0-9]+_)?(.*)$/;
@@ -2147,12 +2152,12 @@ sub cleanup_ontology_levels {
 
 sub compare_onto_lines {
     # compares two hashes and an optional ignore list, returning the differing keys, or [<|>]key  for missing keys 
-    my ($l_1, $l_2,@ignore_list)=@_;
+    my ($L_1, $L_2,@ignore_list)=@_;
 
     
-    my @comp_keys=uniq((keys(%{$l_1}),keys(%{$l_2})));
+    my @comp_keys=uniq((keys(%{$L_1}),keys(%{$L_2})));
     my %ignore;
-    if(scalar(@ignore_list)){#if has elements.
+    if(scalar(@ignore_list)){ #if has elements.
 	#print("Ignoring Some.. ");
 	#sleep_with_countdown(5);
 	@ignore{@ignore_list}=();
@@ -2160,14 +2165,26 @@ sub compare_onto_lines {
     my $diff_={};# my $differing_keys=[];
     foreach (@comp_keys){
 	if ( ! exists($ignore{$_} ) ){# if not an ignore key
-	    if (! exists($l_1->{$_}) ) {
-		$diff_->{$_}='>';#push(@{$differing_keys},'>'.$_);
-	    } elsif (! exists( $l_2->{$_}) ) {
-		$diff_->{$_}='<';#push(@{$differing_keys},'<'.$_);
-	    } elsif ($l_1->{$_} ne $l_2->{$_}){
-		$diff_->{$_}='|';#push(@{$differing_keys},$_);
+	    # cases, exist, undef, 
+	    # all conditions true.
+	    if ( exists($L_1->{$_}) && exists($L_2->{$_})
+		 && defined $L_1->{$_} && defined $L_2->{$_} ) {
+		    if ( $L_1->{$_} ne $L_2->{$_} ){
+			$diff_->{$_}='|';
+		    } else {
+			#$diff_->{$_}='=';#push(@{$differing_keys},$_);		    
+		    }
+		
+		
+	    } elsif ( exists($L_1->{$_}) ) {
+		if ( defined $L_1->{$_}) {
+		    $diff_->{$_}='<';
+		}
+	    } elsif ( exists($L_2->{$_}) ) {
+		if ( defined $L_2->{$_}) {
+		    $diff_->{$_}='>';
+		}
 	    } else {
-		#$diff_->{$_}='=';#push(@{$differing_keys},$_);
 	    }
 	}
     }
