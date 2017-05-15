@@ -55,8 +55,8 @@ use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_consta
 use text_sheet_utils;
 #use xml_read qw(xml_read);
 our %opt;
-if (! getopts('c:h:m:o:t:', \%opt||$#ARGV>=0)) {
-    die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (clean|Abbrev|modelfile|ontology))?";
+if (! getopts('d:c:h:m:o:t:', \%opt||$#ARGV>=0)) {
+    die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (Clean|Name|Structure|Abbrev))?";
 }
 #-h hierarchy.csv
 #-m inmrml.mrml
@@ -74,6 +74,10 @@ my $rename_type=$opt{"t"};
 my $p_color_table_in=$opt{"c"};
 my $model_prefix="Model_";
 $debug_val=20;
+if ( exists $opt{d}) {
+    $debug_val=$opt{d};
+}
+
 my $p_mrml_out_template;
 if ( ! defined $p_mrml_in || ! defined $p_color_table_in || ! defined $p_ontology_in ) { 
     print("specifiy at least:\n\t(-h hierarchical_ontology)\n\t(-m mrml)\n\t(-c color_table).\nOptionally specify\n\t(-o output mrml)\n\t(-t  rename type [Clean|Name|Structure|Abbrev])\n");
@@ -87,6 +91,9 @@ if ( ! defined $p_mrml_in || ! defined $p_color_table_in || ! defined $p_ontolog
 }
 if ( ! defined $rename_type ) { 
     $rename_type='Structure';
+}
+if ( $rename_type !~/(Clean|Name|Structure|Abbrev)/x ) {
+    die "Rename type $rename_type not in (Clean|Name|Structure|Abbrev)";
 }
 if ( ! defined $p_mrml_out ) {
     my ($p,$n,$e)=fileparts($p_mrml_in,2);
