@@ -2076,6 +2076,7 @@ sub cleanup_ontology_levels {
 	#
 	# this clears super_structs, and selectively adds to direct_assignments.
 	# looks like this may fail when there's only one assignment.
+	printd(50,"\tSetting direct assignments for ".scalar(@super_structs)." structure(s).\n");
 	my @direct_assignments;
 	for(my $s_c=0;$s_c<=$#super_structs;$s_c++){
 	    my $cur=shift(@super_structs);
@@ -2093,12 +2094,16 @@ sub cleanup_ontology_levels {
 	    }
 	    push(@super_structs,$cur);# Add tested struct to end of list
 	}
+	
 	#
 	# Check that at least one structure will be directly assigned. This code should never run.
 	#
+	printd(50,"\tEnsuring assignment of structure at least one place.\n");
 	my $err_t="";
 	if( ! scalar(@direct_assignments) ) {
-	    $err_stop=1;
+	    if ($o_entry->{"Name"} !~ /^Exterior|Inside$/x ) {
+		$err_stop=1;
+	    }
 	    $err_t="Err Line: ".$o_entry->{"t_line"}." ".join(",",@super_structs).")";
 	    my $t_hash;
 	    for my $structure(@super_structs) {
@@ -2117,9 +2122,12 @@ sub cleanup_ontology_levels {
 	}
 	if( scalar(@direct_assignments) > 0 ) {
 	    $o_entry->{"DirectAssignment"}=\@direct_assignments;
+
 	} else {
+	    print("HANGING STRUCTURE\n");
 	    dump($o_entry);
-	    die("No assignments made!");
+	    my $msg="No assignments made for ($o_entry->{Name}), REMOVME THIS FROM YOUR LISTS!";
+	    cluck($msg);
 	}
 	#dump($o_entry);
     }
