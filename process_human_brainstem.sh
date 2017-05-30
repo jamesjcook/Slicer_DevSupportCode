@@ -7,8 +7,8 @@ data_file_name="Reg_S64550_labels_20170206"; # for mouse was, "segmentation_0426
 #ontology_name="civm_human_brainstem_v0_ontology_with_combostructs";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
 #ontology_name="civm_human_brainstem_v0_ontology_withlr_and_combostructs";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
 #ontology_name="civm_human_brainstem_v0_ontology_withlr";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
-ontology_name="civm_human_brainstem_v0_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
-ontology_name_out="civm_human_brainstem_v1_ontology"; # for mouse was civm_mouse_v3_ontology
+ontology_name="civm_human_brainstem_v0.5_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
+ontology_name_out="civm_human_brainstem_v0.75_ontology"; # for mouse was civm_mouse_v3_ontology
 update_model_file="models_update20170424";# for mouse was "models_update20160426";
 # Move old model file to timestamped version so we're not destructive.
 if [ -e ${data_path}/models.mrml ]; then
@@ -20,7 +20,7 @@ if [ -e ${data_path}/models.mrml ]; then
     exit;
 fi
 redo="No";
-#redo="yes"
+redo="yes"
 # Generate ModelHierachy.mrml and update lookup table with Hierarchy information from hierarchy spreadsheet.
 # We use this updated lookup table for the abbreviations and name versions.
 if [ ! -f ${data_path}/${udpate_name}/ModelHierarchy_Structure.mrml -o $redo="yes" ]; then
@@ -137,7 +137,8 @@ function copy_if_older ()
 	if [ -f $dest_file ]; then
 	    input_epoc=$(date -r "$input_file" +%s)
 	    dest_epoc= $(date -r  "$dest_file" +%s)
-	    if (( $dest_epoc < $input_epoc )); then
+	    if ( ( $dest_epoc < $input_epoc ) ) ; then
+		#if ( `is_older $dest_file $input_file`); then
 		ts=`stat -f %Sm -t %Y-%m-%d_%H:%M:%s%z $dest_file`;
 	 	mv -v $dest_file $dest_file$ts
 	    fi;
@@ -150,6 +151,11 @@ function copy_if_older ()
     return;
 }
 
+function is_older ()
+{
+    
+    return 0;
+}
 copy_if_older $input_file $dest_file ;
 copy_if_older ${update_name}/${ontology_name}_Structure_Lists_out.headfile ${update_name}/_feedback/${ontology_name_out}_Structure_to_leaf.headfile ;
 copy_if_older ${update_name}/${ontology_name}_Structure_Lists_out.csv ${update_name}/_feedback/${ontology_name_out}_Structure_to_leaf.csv ;
