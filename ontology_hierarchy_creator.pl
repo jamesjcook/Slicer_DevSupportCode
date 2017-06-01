@@ -56,6 +56,7 @@ use text_sheet_utils;
 #use xml_read qw(xml_read);
 our %opt;
 if (! getopts('d:c:h:m:o:t:', \%opt||$#ARGV>=0)) {
+    # (d)ebug (c)olor_table (h)ierarchy (m)rml_in (o)utput (t)ype_of_renaming
     die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (Clean|Name|Structure|Abbrev))?";
 }
 #-h hierarchy.csv
@@ -96,16 +97,16 @@ if ( $rename_type !~/(Clean|Name|Structure|Abbrev)/x ) {
     die "Rename type $rename_type not in (Clean|Name|Structure|Abbrev)";
 }
 if ( ! defined $p_mrml_out ) {
-    my ($p,$n,$e)=fileparts($p_mrml_in,2);
+    my ($p,$n,$e)=fileparts($p_mrml_in,3);
     #print "n=$n p=$p e=$e\n";
     $p_mrml_out=$p.$n."_".$rename_type."_out".$e;
     print("Auto mrml out will be \"$p_mrml_out\".\n") ;
 }
 
-my ($Tp,$Tn,$Te)=fileparts($p_color_table_in,2);
+my ($Tp,$Tn,$Te)=fileparts($p_color_table_in,3);
 my $p_color_table_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 
-($Tp,$Tn,$Te)=fileparts($p_ontology_in,2);
+($Tp,$Tn,$Te)=fileparts($p_ontology_in,3);
 my $p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 my $p_ontology_structures_out=$Tp.$Tn."_".$rename_type."_Lists_out".$Te;
 my $p_ontology_levels_out=$Tp.$Tn."_".$rename_type."_Levels_out".$Te;
@@ -251,6 +252,8 @@ my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
 
 my $ontology;
 $ontology=cleanup_ontology_levels($o_table,$c_table);
+#dump($ontology->{"Hierarchy"});exit;
+
 # if (keys %{ $ontology } ) {
 #     print ("YES-keys\n");
 # }
@@ -733,7 +736,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	if(scalar(@parent_hierarchy_names)<1 ) {
 	    die("Bad structure, no entries in hierarchy.");
 	} else {
-	    dump(@parent_hierarchy_names);
+	    printd(65,"\tparent hierarchy name: ".join(" ",@parent_hierarchy_names).".\n");
 	}
 	@parts=@parent_hierarchy_names;# for all direct assignments, get their parent.
 	#print ("YES-keys\n");
@@ -810,8 +813,10 @@ foreach my $mrml_model (@mrml_nodes) {
     	    #if ( ! exists $ontology->{"Twigs"}->{$tnum.$branch_name} ) {  # this code works, but its duplicataive.
 	    # IF not exist, This node had no parents,and we're a direct root node.
 	    #}
+	    printd(65,"\tFinding parent $branch_name\n");
 	    if ( exists $ontology->{"Hierarchy"}->{$tnum.$branch_name} ) {
 		# IF exist, This node is a direct root node.
+		printd(85,"\tRoot node\n");
 		if ( exists $ontology->{"Twigs"}->{$tnum.$branch_name} ) {
 		    die "PARENT DETECTION FAILURE";
 		}
@@ -844,7 +849,11 @@ foreach my $mrml_model (@mrml_nodes) {
 	    }
 	    # Check if this node has been defined already.
 	    #OH Ho, needed exact find!
+	    printd(65,"\tSearching for ModelHierarchy $part_node_hierarchy_id\n");
+	    my $l_debug=$debug_val;
+	    $debug_val=49;
 	    my @existing_nodes=mrml_find_by_id($mrml_data,'^'.$part_node_hierarchy_id.'$',"ModelHierarchy");
+	    $debug_val=$l_debug;
 	    if (scalar(@existing_nodes)>0 ){
 		$node_exists_bool=1;
 	    }
@@ -2055,6 +2064,9 @@ sub cleanup_ontology_levels {
 	#dump($o_entry);
 	#exit;
         } else {
+	#
+	# BEGIN INACTIVE CODE
+	#
 	# need to refactor this to make up a min level arrangement.
 	if($max_levels<scalar(@super_structs)){
 	    $max_levels=scalar(@super_structs);
@@ -2069,6 +2081,9 @@ sub cleanup_ontology_levels {
 		$o_entry->{$level_string}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
 	    }
 	}
+	#
+	# END INACTIVE CODE
+	#
         }
 
 	#
@@ -2098,7 +2113,7 @@ sub cleanup_ontology_levels {
 	#
 	# Check that at least one structure will be directly assigned. This code should never run.
 	#
-	printd(50,"\tEnsuring assignment of structure at least one place.\n");
+	printd(50,"\tEnsuring assignment of structure ( $o_entry->{Name} ) at least one place.\n");
 	my $err_t="";
 	if( ! scalar(@direct_assignments) ) {
 	    if ($o_entry->{"Name"} !~ /^Exterior|Inside$/x ) {
