@@ -44,7 +44,7 @@ if [ -e ${data_path}/models.mrml ]; then
     exit;
 fi
 redo="No";
-redo="yes"
+#redo="yes"
 # Generate ModelHierachy.mrml and update lookup table with Hierarchy information from hierarchy spreadsheet.
 # We use this updated lookup table for the abbreviations and name versions.
 #if [  ! -f ${data_path}/${update_name}/ModelHierarchy_Structure.mrml  -o  $redo = "yes" ];then 
@@ -68,7 +68,6 @@ if [  \( ! -f ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) -o \(
     cp -p ${data_path}/${update_name}/${ontology_name}_Structure_out.csv ${data_path}/${update_name}/${ontology_name}_fix.csv
     ontology_name="${ontology_name}_fix";
 fi
-exit;
 # Generate ModelHierarchy_Abbrev(just in case).
 if [ \( ! -f ${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml \) -o \( $redo = "yes" \) \
    -o \( ${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml -ot ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) ]; then 
