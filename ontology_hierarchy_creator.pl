@@ -878,7 +878,9 @@ foreach my $mrml_model (@mrml_nodes) {
 		push @nums, 128 x ( 3 - @nums ) ;# ensure nums is at least 3 big.
 		#@nums=@nums[0..2]; $_ /= 255 for @nums;# works with unin int warning THE WARNING WAS FOR SHORT STRUCTURES
 		my @tmp=@nums;
-		@nums=@nums[0..2]; $_ = int($_)/255 foreach @nums;
+		#@nums=@nums[0..2]; $_ = int($_)/255 foreach @nums; # if would be good to get this to a min of 0.5 
+		@nums=@nums[0..2]; $_ = int($_)/127 foreach @nums;
+
 		# first element only...
 		#$model_display_template->{"color"}=sprintf("%0.0f ",@nums);
 		#$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f",
