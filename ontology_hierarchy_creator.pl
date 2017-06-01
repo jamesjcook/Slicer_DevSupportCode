@@ -740,7 +740,8 @@ foreach my $mrml_model (@mrml_nodes) {
 	}
 	@parts=@parent_hierarchy_names;# for all direct assignments, get their parent.
 	#print ("YES-keys\n");
-	if ( scalar(@parent_hierarchy_names)>1 ){ 
+	# commented out this hierarchy check... without it we dont build the rest of our tree.
+	#if ( scalar(@parent_hierarchy_names)>1 ){ 
 	    for my $assign (@parts) {
 		my $test=$assign;
 		while(exists( $ontology->{"Twigs"}->{$test} ) ){#while not a root node, add to list, and get ready to test next.
@@ -753,7 +754,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	    @parts = sort { $ontology->{"SuperCount"}->{$b} <=> $ontology->{"SuperCount"}->{$a} } @parts;
 	    print("\tMultiAssignment(".join(" ",@parts).")\n") if ($debug_val>=25);
 	    
-	} else { print("\tSingleAssignment\n") if ($debug_val>=35);}
+        #} else { print("\tSingleAssignment\n") if ($debug_val>=35);}
     }
     if (scalar(@parts)<1 ) {
 	die("NO PARTS TO ASSIGN ontology line:".$o_entry->{"t_line"}."\n");
