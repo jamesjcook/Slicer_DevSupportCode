@@ -7,8 +7,8 @@ data_file_name="Reg_S64550_labels_20170206"; # for mouse was, "segmentation_0426
 #ontology_name="civm_human_brainstem_v0_ontology_with_combostructs";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
 #ontology_name="civm_human_brainstem_v0_ontology_withlr_and_combostructs";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
 #ontology_name="civm_human_brainstem_v0_ontology_withlr";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
-ontology_name="civm_human_brainstem_v0.5_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
-ontology_name_out="civm_human_brainstem_v0.75_ontology"; # for mouse was civm_mouse_v3_ontology
+ontology_name="civm_human_brainstem_v0.55_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
+ontology_name_out="civm_human_brainstem_v0.65_ontology"; # for mouse was civm_mouse_v3_ontology
 update_model_file="models_update20170424";# for mouse was "models_update20160426";
 
 function is_older ()
@@ -68,6 +68,7 @@ if [  \( ! -f ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) -o \(
     cp -p ${data_path}/${update_name}/${ontology_name}_Structure_out.csv ${data_path}/${update_name}/${ontology_name}_fix.csv
     ontology_name="${ontology_name}_fix";
 fi
+
 # Generate ModelHierarchy_Abbrev(just in case).
 if [ \( ! -f ${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml \) -o \( $redo = "yes" \) \
    -o \( ${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml -ot ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) ]; then 
