@@ -251,9 +251,22 @@ my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
 
 
 my $ontology;
-$ontology=cleanup_ontology_levels($o_table,$c_table);
-#dump($ontology->{"Hierarchy"});exit;
+my $null;
+#$ontology=cleanup_ontology_levels($o_table,$c_table); # we pass the color table, but it doesnt look like we use it, testing passinga null var shows the code still runs. 
+$ontology=cleanup_ontology_levels($o_table,$null);
 
+if ( 0 ) {
+dump(%{$ontology->{"Hierarchy"}});
+dump(%{$ontology->{"Branches"}});
+dump(%{$ontology->{"Twigs"}});
+dump(%{$ontology->{"SuperCount"}});
+dump(%{$ontology->{"SuperLevel"}});
+dump(%{$ontology->{"order_lookup"}});
+
+exit;
+
+
+}
 # if (keys %{ $ontology } ) {
 #     print ("YES-keys\n");
 # }
@@ -1383,6 +1396,7 @@ sub cleanup_ontology_levels {
     # onto order_lookup, the discovered meta structures with their ordering 
     #                    number if they've got one. Only the first number 
     #                    found will be used for any group.
+    #                    this is prepended onto the name of the meta-structure on the table to facilitate sorting.
     # onto SuperCount, the discovered meta structures with their leaf count.
     # onto SuperLevel, the discovered meta struccutres, and a vote count to 
     #                   set which level a particular structure should be on from the leaves result.
@@ -1396,6 +1410,11 @@ sub cleanup_ontology_levels {
     # onto Hierarchy, any branch without a parent is a root hierarchy node, 
     #                 these are added here so that we can dump the hierarchy 
     #                 and see the full tree we've built.
+    # onto LevelAssignments, As the levels of the hierarchy are discoverd we're going to write in their preference.
+    #                       We've gotten cause for several meta-structures to have the same contents.
+    #                       To handle that well, they need to have been in the reight order in the input. This will
+    #                       serve as a way to maintain that. Preventing over assignment and pileup.
+
     
     my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
     #dump(@o_columns); #dump($o_table->{$o_columns[0]}); # a worse version of the commented test.
@@ -1652,8 +1671,10 @@ sub cleanup_ontology_levels {
 	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
 	#my @parts=@o_columns;
 	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+	#my @levels=@parts;
+	my %l_p;# level preference holder for all the meta_structures for this linke in ontology.
 	if (scalar(@parts)>0 ) {
-	    print("\t got ".scalar(@parts)."\n") if $debug_val>=45;
+	    print("\t got ".scalar(@parts)." levels\n") if $debug_val>=45;
 	    #dump(%$o_entry); # this works.
 	    #dump(%{$o_entry{@parts}}); # his doesnt.
 	    #dump(%{$o_entry}); this works
@@ -1661,7 +1682,9 @@ sub cleanup_ontology_levels {
 	    #dump($o_entry->{@parts});# this is undef
 	    #dump(@$o_entry->{@parts});# not an array reference
 	    #dump(@$o_entry{@parts});# THIS WORKS!
+	    @l_p{@{$o_entry}{@parts}}=@parts;# has to be done first since we destroy parts.
 	    @parts=@{$o_entry}{@parts}; # Now get the values at each present level.
+
 	    #IF there is only one part, AND its bogus!
 	    if ( scalar(@parts)==1 ) {
 		if (  ( not defined $parts[0] ) 
@@ -1671,18 +1694,23 @@ sub cleanup_ontology_levels {
 		    ) {
 		    warn("");
 		    @parts=("UNSORTED");# at a minimum, they have unsorted....
+		    %l_p={};
+		    $l_p{"UNSORTED"}="Level_1";
 		} 
 	    }	    
 	} else {
 	    warn("NO Proper keys for line $o_entry->{t_line} using UNSORTED");
 	    @parts=("UNSORTED");# at a minimum, they have unsorted....
+	    %l_p={};
+	    $l_p{"UNSORTED"}="Level_1";
 	    sleep_with_countdown(2);
 	}
+
 	#
 	# Get ontology levels and assign structure to the different levels in the ultra meta hash.
 	#
 	my @onto_levels=();my $level_show_bool=0;
-	print($o_entry->{"Name"}."\t".$o_entry->{"t_line"}."\n");
+	print($o_entry->{"Name"}."\t Line:".$o_entry->{"t_line"}."\n");
 	for(my $pn=0;$pn<=$#parts;$pn++){
 	    # process the different levels of ontology, get the different ontology names.
 	    # clean them up and put them into the onto_levels list.
@@ -1693,6 +1721,7 @@ sub cleanup_ontology_levels {
 		next;
 	    }
 	    trim($branch_name);
+	    my $level_name=$l_p{$branch_name};#
 	    my $tnum="";
 	    ($tnum,$branch_name)= $branch_name =~/^([0-9]+_)?(.*)$/;
 	    $tnum="" unless defined $tnum;
@@ -1781,6 +1810,11 @@ sub cleanup_ontology_levels {
 			    $onto_hash->{"order_lookup"}->{$ol}="1_";
 			}
 		    }
+		    if ( ! exists($onto_hash->{"LevelAssignments"}->{$ol}->{$level_name}) ){
+			$onto_hash->{"LevelAssignments"}->{$ol}->{$level_name}=1;
+		    } else {
+			$onto_hash->{"LevelAssignments"}->{$ol}->{$level_name}=$onto_hash->{"LevelAssignments"}->{$ol}->{$level_name}+1;
+		    }
 		}
 	    } else {
 		if (0 && $o_entry->{"t_line"}==51 ){ # line 51 was a multi_line in the past, that'll probably change.
@@ -1795,11 +1829,18 @@ sub cleanup_ontology_levels {
 			$onto_hash->{"order_lookup"}->{$branch_name}="1_";
 		    }
 		} else {
+		    printd(95,"Using order lookup for $branch_name\n");
 		    my $a_tnum=$onto_hash->{"order_lookup"}->{$branch_name};
 		    if ($a_tnum ne $tnum && $debug_val>=45) {
 			print("AttemptedLevelOverride!".$o_entry->{"Name"}.
 			      ": branch_name=$branch_name tnum=\"$a_tnum\" is not \"$tnum\"\n");
 		    }
+		}
+		if ( ! exists($onto_hash->{"LevelAssignments"}->{$branch_name}->{$level_name}) ){
+		    $onto_hash->{"LevelAssignments"}->{$branch_name}->{$level_name}=1;
+		} else {
+		    $onto_hash->{"LevelAssignments"}->{$branch_name}->{$level_name} =
+			$onto_hash->{"LevelAssignments"}->{$branch_name}->{$level_name}+1;
 		}
 	    }
 	    if  ( 0 
@@ -1808,8 +1849,9 @@ sub cleanup_ontology_levels {
 		next;
 	    }
 	}
+
 	# HERE WE SHOULD BE ABLE TO SEE PARTS
-	dump(@onto_levels);
+	# dump(@onto_levels);
 	#sleep_with_countdown(15);
 	@onto_levels=uniq(@onto_levels);
 	printf("\t".join("\n\t",@onto_levels)."\n") if ($debug_val>45);
@@ -1824,12 +1866,13 @@ sub cleanup_ontology_levels {
 	# onto super_nums, the superstructures with their number if they've got one. Only the first number found will be use. 
 	# onto branches, once we have the other two components we'll try to back calculate the ontology lookup.
     }
-    #dump($seen);
+    # dump($onto_hash->{"LevelAssignments"});exit;
+    # dump($seen);
     if( scalar(@onto_error_msgs) ) {
 	warn (join("\n",@onto_error_msgs));
     }
-    #dump(@onto_errors);
-    #exit;
+    # dump(@onto_errors);
+    # exit;
     #dump($onto_hash);
 
     # NOW WE NEED TO RE_CREATE THE BRANCHES.
@@ -1844,21 +1887,70 @@ sub cleanup_ontology_levels {
     #
     my $super_struct_hash;
     my @super_structs=keys(%{$onto_hash->{"SuperStructures"}});
+    #dump($onto_hash->{"SuperStructures"});
+    dump($onto_hash->{"LevelAssignments"});
     for my $super (@super_structs) {
 	if ( ! exists($onto_hash->{"SuperStructures"}->{$super} ) ) {
 	    print("Missing $super\n");
 	}
-	$super_struct_hash->{$super}=scalar(@{$onto_hash->{"SuperStructures"}->{$super}}); # this isnt right.
+	$super_struct_hash->{$super}=scalar(@{$onto_hash->{"SuperStructures"}->{$super}}); # this isnt right.?
+
+	my $max=0;
+	my $level=0;
+	#dump($onto_hash->{"LevelAssignments"}->{$super});exit;
+	#printd(95,"Getting best level of $super  ");
+	foreach ( sort(keys(%{$onto_hash->{"LevelAssignments"}->{$super}} )) ) {
+	    my $t=$onto_hash->{"LevelAssignments"}->{$super}->{$_};
+	    if( $t>$max){
+		#printd(95,"New max $_ \n");
+		$max=$onto_hash->{"LevelAssignments"}->{$super}->{$_};
+		($level)=$_=~/Level_([0-9]+)/x;
+	    }
+	}
+	$onto_hash->{"LevelPreference"}->{$super}=$level;
+	#printd(95,"found $level\n");
     }
     $onto_hash->{"SuperCount"}=$super_struct_hash;
+    #dump($onto_hash->{"LevelPreference"});
+    #dump($onto_hash->{"SuperCount"});
+    #exit;
+    
     #
-    # sort keys of super hash descending.
+    # sort keys of super hash descending by count of leaf structures.
+    # And by level preference, so we can use equiv parentage.
     #
-    @super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> 
-				$onto_hash->{"SuperCount"}->{$a} } keys(%{$onto_hash->{"SuperCount"}});
+    if ( 1 ) { 
+	@super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> 
+				$onto_hash->{"SuperCount"}->{$a} 
+			    || $onto_hash->{"LevelPreference"}->{$a} <=> 
+				$onto_hash->{"LevelPreference"}->{$b} 
+			    
+	} keys(%{$onto_hash->{"SuperCount"}});
+	#dump(@super_structs);
+    } else {
+	# sort first by level preference
+	@super_structs = sort { $onto_hash->{"LevelPreference"}->{$a} <=> 
+				    $onto_hash->{"LevelPreference"}->{$b} 
+	} keys(%{$onto_hash->{"LevelPreference"}});
+	dump(@super_structs);
+	# then add sort by super count. This preserves older sorting so we can progressivly add more things, if that becomes a ndeed. This code is just a vestigal example.
+	@super_structs = sort { $onto_hash->{"SuperCount"}->{$b} <=> 
+				    $onto_hash->{"SuperCount"}->{$a} 
+	#} keys(%{$onto_hash->{"SuperCount"}});
+	} @super_structs;
+	dump(@super_structs);
+	
+    }
+    #dump($onto_hash);
+    #dump(@super_structs);
+    #printd(5,"Temporary EXIT, need to insert code which trys to sort by level right here\n");
+    #exit;
+    
     my @potential_parents=();
     #dump($onto_hash);
     #sleep_with_countdown(15);
+
+    
     #
     # For every "branch" assume its a twig, and find potential parents.
     #
@@ -1867,10 +1959,10 @@ sub cleanup_ontology_levels {
     # 
     # This should allow us to check each previous one in turn, adding to the ontology in pieces.
     # Even furhter, we should check previous parents in reverse as we want the smallest match possible.
+    #
+    # This has a problem when you parents have exactly the same assignment count. Which can occur.
     $onto_hash->{"Hierarchy"}={};
-    #$debug_val=40;
     print("Lineage Discovery\n");
-    
     my $black_list={}; # Second pass structures.
     my @orphans=();
     while(my $twig=shift(@super_structs) ){
@@ -1882,7 +1974,7 @@ sub cleanup_ontology_levels {
 	    #reverse to let us check the next biggest parent.
 	    # get parent element count
 	    my $p_c=$onto_hash->{"SuperCount"}->{$pp};
-	    if ($p_c>$t_c){
+	    if ($p_c>=$t_c){
 		print("\t$p_c <= $pp\n") if ($debug_val>40);
 		# if elementcount of child < elementcount of parent
 		#   get parent elements
@@ -1941,6 +2033,7 @@ sub cleanup_ontology_levels {
 	}
 	push(@potential_parents,$twig);
     }
+    exit;
     # Do another pass, to catch any missing parent nodes.
     if ($#super_structs>=0 ){
 	die("ERROR: PROCESSING INCOMPLETE");
