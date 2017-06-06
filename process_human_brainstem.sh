@@ -68,7 +68,6 @@ if [  \( ! -f ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) -o \(
     cp -p ${data_path}/${update_name}/${ontology_name}_Structure_out.csv ${data_path}/${update_name}/${ontology_name}_fix.csv
     ontology_name="${ontology_name}_fix";
 fi
-
 # Generate ModelHierarchy_Abbrev(just in case).
 if [ \( ! -f ${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml \) -o \( $redo = "yes" \) \
    -o \( ${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml -ot ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) ]; then 
@@ -108,8 +107,9 @@ else
 fi
 
 ts=`stat -f %Sm -t %Y-%m-%d_%H:%M:%s%z $l_p`;
-mv ${data_path}/$l_n ${data_path}/${l_n%%.*}$ts.nii.gz
-old_labelfile="${data_path}/$l_n$ts";
+#old_labelfile="${data_path}/$l_n$ts";
+old_labelfile="${data_path}/${l_n%%.*}$ts.${ln#*.}";
+mv ${data_path}/$l_n $old_labelfile
 
 
 # link up new files
@@ -126,11 +126,11 @@ if [ ! -e $l_n ]; then
     l_p=`ls ${update_name}/${data_file_name}_hfe.nii*`
     if [ ${l_p##.*} != "gz" ]; then
 	echo $l_p is not gzipped.
-	gzip -c ${l_p} > $l_n.gz;
+	gzip -c ${l_p} > ${l_n%%.*}.nii.gz;
 	oldfile_name=`basename $old_labelfile`;
 	echo "checking if labels are different"
-	echo $PWD diff $oldfile_name $l_n
-	DIFF=$(diff $oldfile_name $l_n.gz)
+	echo $PWD diff $oldfile_name ${l_n%%.*}.nii.gz
+	DIFF=$(diff $oldfile_name ${l_n%%.*}.nii.gz)
 	if [ "$DIFF" != "" ]
 	then
 	    echo "New label file in place"
