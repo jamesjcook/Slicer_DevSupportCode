@@ -2033,7 +2033,6 @@ sub cleanup_ontology_levels {
 	}
 	push(@potential_parents,$twig);
     }
-    exit;
     # Do another pass, to catch any missing parent nodes.
     if ($#super_structs>=0 ){
 	die("ERROR: PROCESSING INCOMPLETE");
