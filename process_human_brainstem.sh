@@ -7,8 +7,9 @@ data_file_name="Reg_S64550_labels_20170206"; # for mouse was, "segmentation_0426
 #ontology_name="civm_human_brainstem_v0_ontology_with_combostructs";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
 #ontology_name="civm_human_brainstem_v0_ontology_withlr_and_combostructs";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
 #ontology_name="civm_human_brainstem_v0_ontology_withlr";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
-ontology_name="civm_human_brainstem_v0.55_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
-ontology_name_out="civm_human_brainstem_v0.65_ontology"; # for mouse was civm_mouse_v3_ontology
+#ontology_name="civm_human_brainstem_v0.55_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
+ontology_name="civm_human_brainstem_v0.66_ontology";  # for mouse was civm_mouse_v2_ontology, dont have an ontology yet...
+ontology_name_out="civm_human_brainstem_v0.67_ontology"; # for mouse was civm_mouse_v3_ontology
 update_model_file="models_update20170424";# for mouse was "models_update20160426";
 
 function is_older ()
@@ -61,6 +62,9 @@ if [  \( ! -f ${data_path}/${update_name}/ModelHierarchy_Structure.mrml \) -o \(
     then echo "newer txt"; fi
     echo ./ontology_hierarchy_creator.pl -o ${data_path}/${update_name}/ModelHierarchy_Structure.mrml -m ${data_path}/${update_model_file}.mrml -h ${data_path}/${update_name}/${ontology_name}.csv -c ${data_path}/${update_name}/${data_file_name}.atlas.txt -t Structure
     ./ontology_hierarchy_creator.pl -o ${data_path}/${update_name}/ModelHierarchy_Structure.mrml -m ${data_path}/${update_model_file}.mrml -h ${data_path}/${update_name}/${ontology_name}.csv -c ${data_path}/${update_name}/${data_file_name}.atlas.txt -t Structure
+    if [  ${data_path}/${update_name}/${data_file_name}.atlas_Structure_out.txt -ot ${data_path}/${update_name}/${ontology_name}.csv ]; then
+	echo "HIERARCHY FAIL";
+	exit; fi
     echo cp -p ${data_path}/${update_name}/${data_file_name}.atlas_Structure_out.txt ${data_path}/${update_name}/${data_file_name}_fix.txt
     cp -p ${data_path}/${update_name}/${data_file_name}.atlas_Structure_out.txt ${data_path}/${update_name}/${data_file_name}_fix.txt
     # Copy new hierachy table to fix bad one
@@ -116,7 +120,8 @@ mv ${data_path}/$l_n $old_labelfile
 pushd `pwd`;
 cd ${data_path}/
 if [ ! -e `basename $t_f` ]; then
-    ln -s ${update_name}/${data_file_name}_fix_Name_out.txt `basename $t_f`;
+    echo "Copying new lookup in";
+    cp -p ${update_name}/${data_file_name}_fix_Name_out.txt `basename $t_f`;
 else
     echo "Error in preserving old files(lookup)."
 fi
@@ -185,7 +190,7 @@ function copy_if_older ()
 	cp -vpn $input_file $dest_file;
     else
 	#same
-	echo  "No copy, files are the same.";
+	echo  "No copy, files are the same.($input_file, $dest_file)";
     fi
     return;
 }
