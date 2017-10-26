@@ -64,6 +64,10 @@ if (! getopts('d:c:h:m:o:t:', \%opt||$#ARGV>=0)) {
 #-c colortabl.txt
 #-o output.mrml
 
+### What about different column names for the same things? Should that be supported, or should we just bludgeon things here.
+#my $shorthand="Abbrev"
+#Abbreviation
+
 #my $ontology_inpath=$ARGV[0];
 my $p_ontology_in=$opt{"h"};#$opt{""};
 #my $p_mrml_in=$ARGV[1];
@@ -147,7 +151,7 @@ my $splitter={};#
 # need a new/different one for anything else.
 $splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
-$splitter->{"Input"}=[qw(Name Structure)];# reformulate this var, keeping original in other
+$splitter->{"Input"}=[qw(Name Structure)];# reformulate structure columnr, keeping original in name
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 ### This splitter Regex is for plain comma separated lists.
 
@@ -460,7 +464,7 @@ foreach my $mrml_model (@mrml_nodes) {
     ###
     # we sort throught the possible standard places it could be.
     # adding second chance via color lookup.
-    my @o_test=qw(Value Abbrev Name Structure);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    my @o_test=qw(Value Name Abbrev  Structure);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
     do {
 	$tx=shift(@o_test) ;
     } while(defined $n_a{$tx} 
@@ -744,7 +748,9 @@ foreach my $mrml_model (@mrml_nodes) {
 	if (exists($o_entry->{"DirectAssignment"}) ) {
 	    @parent_hierarchy_names=@{$o_entry->{"DirectAssignment"}};
 	} else {
-    	    die("Bad structure, no entries in hierarchy. DirectAssignmentsNotSpecified");
+	    print("Bad structure,\t");
+	    dump($o_entry);
+    	    die("no entries in hierarchy. DirectAssignmentsNotSpecified");
 	}
 	if(scalar(@parent_hierarchy_names)<1 ) {
 	    die("Bad structure, no entries in hierarchy.");
@@ -1420,9 +1426,11 @@ sub cleanup_ontology_levels {
     #dump(@o_columns); #dump($o_table->{$o_columns[0]}); # a worse version of the commented test.
     #dump($o_table->{"t_line"}); # test that we have contents by line in our table.
     my $seen={}; # a hash of the expectedly unique keys of the hash.
+    # our brainstem hierarchy broke the abbrevaiaiton uniqueness.
+    # goint to try commenting this out just to see if that lets it process sucessfully.
     $seen->{"Value"}={};     # 
     $seen->{"Structure"}={}; #
-    $seen->{"Abbrev"}={};    #
+    #$seen->{"Abbrev"}={};    #
     $seen->{"Name"}={};      #
     $seen->{"t_line"}={};    # by definition this should be unique, but we'll check anyway.
     my @onto_errors=();      # linenumbers of error.
@@ -1672,7 +1680,7 @@ sub cleanup_ontology_levels {
 	#my @parts=@o_columns;
 	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
 	#my @levels=@parts;
-	my %l_p;# level preference holder for all the meta_structures for this linke in ontology.
+	my %l_p;# level preference holder for all the meta_structures for this link in ontology.
 	if (scalar(@parts)>0 ) {
 	    print("\t got ".scalar(@parts)." levels\n") if $debug_val>=45;
 	    #dump(%$o_entry); # this works.
@@ -2238,6 +2246,7 @@ sub cleanup_ontology_levels {
 	    dump($o_entry);
 	    my $msg="No assignments made for ($o_entry->{Name}), REMOVME THIS FROM YOUR LISTS!";
 	    cluck($msg);
+	    sleep_with_countdown(4);
 	}
 	#dump($o_entry);
     }
