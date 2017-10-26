@@ -73,6 +73,8 @@ my ($xml_data,$xml_parser)=xml_read($inmrml,'giveparser');
 
 #print("colortable ".($#color_table+1)." lines loaded\n");
 mrml_clear_nodes($xml_data,("ModelHierarchy","ModelDisplay","Model","ModelStorage","Version", "UserTags"));
+#, "TransformStorage", "LinearTransform"));
+#mrml_clear_nodes($xml_data,("ModelHierarchy","ModelDisplay","Model","ModelStorage","Version", "UserTags", "TransformStorage", "LinearTransform"));
 mrml_to_file($xml_data,'  ',0,'pretty','',$outmrml_n);
 if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq 'abrev') {
     mrml_clear_nodes($xml_data,("ModelHierarchy","ModelDisplay","Version", "UserTags"));
