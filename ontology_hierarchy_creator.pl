@@ -861,7 +861,7 @@ foreach my $mrml_model (@mrml_nodes) {
 		dump(keys(%{$ontology->{"Branches"}}));
 		dump($ontology->{"Branches"}->{$tnum.$branch_name});
 		dump($ontology->{"Hierarchy"});
-		die ("DEADEND with $branch_name, orphaned branch?");
+		die ("DEADEND with $branch_name, orphaned branch?") unless $debug_val>70;
 	    }
 	    if ( ! exists ($ref->{$tnum.$branch_name}) ) {
 		print("ERRROR: Branch not available\n");
@@ -1684,15 +1684,31 @@ sub cleanup_ontology_levels {
 	if (scalar(@parts)>0 ) {
 	    print("\t got ".scalar(@parts)." levels\n") if $debug_val>=45;
 	    #dump(%$o_entry); # this works.
+	    #use Data::Dumper;
+	    #print Dumper($o_entry);
 	    #dump(%{$o_entry{@parts}}); # his doesnt.
 	    #dump(%{$o_entry}); this works
 	    #dump(@{$o_entry}{@parts});# THIS WORKS!!!!
 	    #dump($o_entry->{@parts});# this is undef
 	    #dump(@$o_entry->{@parts});# not an array reference
 	    #dump(@$o_entry{@parts});# THIS WORKS!
-	    @l_p{@{$o_entry}{@parts}}=@parts;# has to be done first since we destroy parts.
-	    @parts=@{$o_entry}{@parts}; # Now get the values at each present level.
-
+	    #dump(@parts);
+	    if ( 1 ) {
+		@l_p{@{$o_entry}{@parts}}=@parts;# has to be done first since we destroy parts next.
+		@parts=@{$o_entry}{@parts}; # Now get the values at each present level. Generates errors for any missing levels. Be nice to fix that.
+	    } else {
+		my @np=();
+		foreach(@parts){
+		    #if ( defined  $o_entry->{$_} ){
+		    if (exists $o_entry->{$_} && defined  $o_entry->{$_} ) {
+			$l_p{$o_entry->{$_}}=$_;
+			push(@np,$o_entry->{$_});
+		    }
+		}
+		@parts=@np;
+	    }
+	    #dump(\%l_p);
+	    #dump(@parts);exit;
 	    #IF there is only one part, AND its bogus!
 	    if ( scalar(@parts)==1 ) {
 		if (  ( not defined $parts[0] ) 
