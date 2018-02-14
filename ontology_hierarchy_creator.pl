@@ -151,7 +151,7 @@ my $splitter={};#
 # need a new/different one for anything else.
 $splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
-$splitter->{"Input"}=[qw(Name Structure)];# reformulate structure columnr, keeping original in name
+$splitter->{"Input"}=[qw(Name Structure)];# reformulate structure column, keeping original in name
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 ### This splitter Regex is for plain comma separated lists.
 
@@ -373,11 +373,16 @@ $splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# takin
 #$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
 #$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.*?)(?:___?(.+))?)$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
-$splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
-$splitter->{"Output"}=[qw(Value Structure Abbrev Name)];  # generating these four
+# HUMAN BRAINSTEM SPLITTER FAILURE!!!!.
+$splitter->{"Regex"}="^($model_prefix([0-9]+)_".'_.+?_(.*))$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
+#Model_5__5_Fouth_ventricle.vtk
+# this is the splitter input pre 201802 revision
+#$splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
+#$splitter->{"Input"}=[qw(  )];# reformulate structure var, keeping original in Model
+# this is the splitter output pre 201802 revision
+#$splitter->{"Output"}=[qw(Value Structure Abbrev Name)];  # generating these four
+$splitter->{"Output"}=[qw(Structure Value Name)];  # generating these three
 
-
-#exit;
 ###
 #foreach model in mrml_data
 ###
@@ -387,11 +392,16 @@ my $processed_nodes=0;
 my $do_unsafe=0;
 my %l_1;
 my %onto_hash;
+print("---\n");
+print("\tBegin model processing!\n");
+print("---\n\n\n");
 foreach my $mrml_model (@mrml_nodes) {
     # Names come from color_tables, so the names should follow a regular pattern here + the added slicer model gen bits.
-    my %n_a; # a holder for the multiple lookup possibilities for each model. This is a multiple level hash cross ref of the names and all the values. 
+    my %n_a; # a holder for the multiple lookup possibilities for each model. 
+    # This is a multiple level hash cross ref of the names and all the values. 
     # model names are split into the component parts, given the splitter defined above.
-    # the default splitter used for paxinos/alex(RBSC)'s labels shows lookup potentials of value, structure_full_avizo_name, Abbrev, Name.
+    # The default splitter used for paxinos/alex(RBSC)'s labels shows lookup potentials of:
+    #     value, structure_full_avizo_name, Abbrev, Name.
     # ex. modelname Model_1_ABC__A_big_name_completely  becomes
     # value=1, structure_full_avizo_name=ABC__A_big_name_completely, Abbrev=ABC, Name=A_big_name_completely.
     my $mrml_name=$mrml_model->{"name"};
@@ -404,19 +414,23 @@ foreach my $mrml_model (@mrml_nodes) {
 	    push(@field_temp, $mrml_name);
 	}
     }
+    
     if ( scalar(@field_keys) == scalar(@field_temp) ) {
 	@n_a{@field_keys} = @field_temp;
 	if (length($msg)>0){
 	    print($msg." But we've fudged it.\n");}
     } else {
-	warn($msg." and couldnt recover");
+	warn($msg." and couldnt recover. expected".scalar(@field_keys).", but we got ".scalar(@field_temp));
+	dump(@field_keys,@field_temp);
 	next;
     }
+    #dump(\%n_a);die;
     if ( $n_a{"Value"}==0 ){ # this throws an error becuase it may not be numeric... but it works anyway.
 	dump(%n_a);
 	print("Special exception for value 0\n");
 	next;
     }
+    
     #### NEED TO ENSURE THE n_a HASH IS CORRECT HERE.
     # theoritically we've run the cleanup function ensuring the ontology is correct.
     #
@@ -464,7 +478,7 @@ foreach my $mrml_model (@mrml_nodes) {
     ###
     # we sort throught the possible standard places it could be.
     # adding second chance via color lookup.
-    my @o_test=qw(Value Name Abbrev  Structure);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    my @o_test=qw(Name Abbrev Structure Value);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
     do {
 	$tx=shift(@o_test) ;
     } while(defined $n_a{$tx} 
@@ -476,7 +490,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	print("$mrml_name\n\tERROR, No ontology Entry found!\n");
 	if ( 1 ) {
 	    push(@missing_model_messages,"No ontology table entry: ".$mrml_name);
-	    #dump(%n_a);	
+	    #dump(%n_a);
 	} else {
 	    #### Harder try to find the ontology using the colors.
 	    if ( not defined($o_entry) ) {
@@ -553,7 +567,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	    # now for each key in the o_table add a 0 to our o_entry, THEN add our o_entry to each point of the o_table.
 	    my @o_columns;
 	    if ( 1 )  {
-		@o_columns=qw(Value Name Abbrev Structure t_line);
+		@o_columns=qw(Name Abbrev Structure t_line);
 	    } elsif ( 0 ) {
 		@o_columns=keys(%{$o_entry});
 	    } else {
@@ -572,7 +586,7 @@ foreach my $mrml_model (@mrml_nodes) {
 		    printf("Added o_entry to index $col at $o_entry->{$col}\n");
 		    #sleep_with_countdown(2);
 		} else {
-		    die("$col has entry for $o_entry->{$col}\n" ) ;
+		    die("$col has entry for $o_entry->{$col}");
 		}
 		if ( ! exists($o_table->{$col}) ){ 
 		    die("o_table missing Index: $col\n");
@@ -614,7 +628,7 @@ foreach my $mrml_model (@mrml_nodes) {
     # 
     # We must trust value on n_a
     # We take for granted that n_a abbrev, name and structure could be different from either color table or ontology.
-    # We should trust the data of o_entry the most.
+    # We should trust the data of o_entry the most. EXCEPT for value!
     $o_entry->{"Value"}    =$n_a{"Value"};
     
     $c_entry->{"Value"}    =$o_entry->{"Value"};
@@ -1402,10 +1416,12 @@ sub cleanup_ontology_levels {
     # onto order_lookup, the discovered meta structures with their ordering 
     #                    number if they've got one. Only the first number 
     #                    found will be used for any group.
-    #                    this is prepended onto the name of the meta-structure on the table to facilitate sorting.
+    #                    this is prepended onto the name of the meta-structure
+    #                    on the table to facilitate sorting.
     # onto SuperCount, the discovered meta structures with their leaf count.
     # onto SuperLevel, the discovered meta struccutres, and a vote count to 
-    #                   set which level a particular structure should be on from the leaves result.
+    #                   set which level a particular structure should be on 
+    #                   from the leaves result.
     # onto line_to_struct, lookup of linenumber to assigned SuperStructure, 
     #                    the inverse of SuperStructures.
     # onto Branches, once we have the SuperStructures and the SuperCount we 
@@ -1416,10 +1432,13 @@ sub cleanup_ontology_levels {
     # onto Hierarchy, any branch without a parent is a root hierarchy node, 
     #                 these are added here so that we can dump the hierarchy 
     #                 and see the full tree we've built.
-    # onto LevelAssignments, As the levels of the hierarchy are discoverd we're going to write in their preference.
-    #                       We've gotten cause for several meta-structures to have the same contents.
-    #                       To handle that well, they need to have been in the reight order in the input. This will
-    #                       serve as a way to maintain that. Preventing over assignment and pileup.
+    # onto LevelAssignments, As the levels of the hierarchy are discoverd 
+    #                        we're going to write in their preference. We have
+    #                        reason for several meta-structures to have 
+    #                        the same contents. To handle that well, they need 
+    #                        to be in the correct order in the input ontology.
+    #                        This will serve as a way to maintain that,
+    #                        preventing over assignment and pileup.
 
     
     my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
@@ -1446,6 +1465,7 @@ sub cleanup_ontology_levels {
 	#
 	# error check for blank entry.
 	#
+	# b_ignore puts any column which is only present in the ontology (and not in the blank) in ignore list
 	my @b_ignore=grep(/join(|,keys(%$o_entry))/,keys(%$blank_entry));
 	push(@b_ignore,"t_line");
 	my $b_test=compare_onto_lines($blank_entry,$o_entry,@b_ignore);
@@ -1454,8 +1474,9 @@ sub cleanup_ontology_levels {
 	    sleep_with_countdown(3);
 	}
 	if ( ! keys %{ $b_test} ) {
-	    print("BOGUS LINE $onto_line\n");dump($o_entry);remove_onto_line($o_table,$onto_line); next;}
-	else {
+	    print("BOGUS LINE $onto_line\n");dump($o_entry);remove_onto_line($o_table,$onto_line); next;
+	    exit;
+	} else {
 	    #print("Not blank $onto_line\n");
 	    #dump($b_test);#exit;
 	}
@@ -1681,8 +1702,8 @@ sub cleanup_ontology_levels {
 	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
 	#my @levels=@parts;
 	my %l_p;# level preference holder for all the meta_structures for this link in ontology.
-	if (scalar(@parts)>0 ) {
-	    print("\t got ".scalar(@parts)." levels\n") if $debug_val>=45;
+	if (scalar(@parts)>0 ) {# with re-tooling of spreadsheet load, this should always have the same number of entries as colums
+	    my $potential_p=scalar(@parts); # potential parts.
 	    #dump(%$o_entry); # this works.
 	    #use Data::Dumper;
 	    #print Dumper($o_entry);
@@ -1693,9 +1714,14 @@ sub cleanup_ontology_levels {
 	    #dump(@$o_entry->{@parts});# not an array reference
 	    #dump(@$o_entry{@parts});# THIS WORKS!
 	    #dump(@parts);
-	    if ( 1 ) {
+	    #
+	    # get the defined levels of this structure
+	    #
+	    # "new" way use hash slice, but throws errors for undefined entries, and there will be undefined entries.
+	    # "old way for each possible entry, if the entries are defined, add one at a time to array, and l_p hash.
+	    if ( 0 ) {
 		@l_p{@{$o_entry}{@parts}}=@parts;# has to be done first since we destroy parts next.
-		@parts=@{$o_entry}{@parts}; # Now get the values at each present level. Generates errors for any missing levels. Be nice to fix that.
+		@parts=@{$o_entry}{@parts};      # Now get the values at each present level. Generates errors for any missing levels. Be nice to fix that.
 	    } else {
 		my @np=();
 		foreach(@parts){
@@ -1707,21 +1733,25 @@ sub cleanup_ontology_levels {
 		}
 		@parts=@np;
 	    }
+	    #dump(@parts);
 	    #dump(\%l_p);
-	    #dump(@parts);exit;
+	    #die;
 	    #IF there is only one part, AND its bogus!
 	    if ( scalar(@parts)==1 ) {
 		if (  ( not defined $parts[0] ) 
 		      || ( $parts[0] eq '' ) 
 		      || ( $parts[0] =~ /^\s*$/ )
-		      || ( $parts[0] eq '0' ) 
+		      || ( $parts[0] eq '0' )
+		      || ( $parts[0] eq 'NULL' )
+		      || ( $parts[0] eq 'UNSORTED' )  
 		    ) {
-		    warn("");
+		    warn("ASSIGNING UNSORTED DUE TO EMPTY/NULL BITS");
 		    @parts=("UNSORTED");# at a minimum, they have unsorted....
 		    %l_p={};
 		    $l_p{"UNSORTED"}="Level_1";
-		} 
-	    }	    
+		}
+	    }
+	    print("\t got ".scalar(@parts)." of ".$potential_p." levels\n") if $debug_val>=45;
 	} else {
 	    warn("NO Proper keys for line $o_entry->{t_line} using UNSORTED");
 	    @parts=("UNSORTED");# at a minimum, they have unsorted....
@@ -1741,6 +1771,7 @@ sub cleanup_ontology_levels {
 	    my $branch_name=$parts[$pn]; # meta structure name
 	    if (! defined $branch_name ){
 		# we dont have this level if its undefined.
+		# this should no longer be possible.
 		#die ("undef branch $pn");
 		next;
 	    }
@@ -1749,13 +1780,9 @@ sub cleanup_ontology_levels {
 	    my $tnum="";
 	    ($tnum,$branch_name)= $branch_name =~/^([0-9]+_)?(.*)$/;
 	    $tnum="" unless defined $tnum;
-	    #universally trash tnum.
-	    #$tnum="";
 	    #$branch_name=~ s/[,\/#]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
 	    $branch_name=~ s/[,\/# ]/_and_/xg;#clean structure name of dirty elements replacing them with _and_.
 	    $branch_name=~ s/[-\/# ]/_to_/xg;#clean structure name of dirty elements replacing them with _to_.
-	    
-	    #print("bn $branch_name\n");
 	    if ( ( 0 )
 		 # THIS IS NOT DEACTIVATING THIS CODE, THIS IS FOR READABILITY LINEING THE CONDITIONS UP ON SUBSEQUENT LINES.
 		 || ( not defined $branch_name ) 
@@ -1765,6 +1792,7 @@ sub cleanup_ontology_levels {
 		) {
 		$level_show_bool=1;
 		warn("bad tree name, skipping to next level");
+		sleep_with_countdown(1);
 		next; 
 	    }
 	    if ( ( $branch_name =~ /_to_/x )
@@ -1773,57 +1801,50 @@ sub cleanup_ontology_levels {
 		     && ($branch_name =~/_and_/x) ) {
 		    die("WOW Really trying to get me arnt you! ontology_line:$o_entry->{t_line}.");
 		}
+		# This is to split up entries with multiple pieces in the same cell.
+		# eg, BrainPart_left_and_BrainPart_right
+		# or, BrainPart1_to_BrainPart4
+		# Support is rudimentary, because it gets tough to decipher additional peices.
 		my @b_parts=split("_and_",$branch_name);
 		# foreach b_part convert _ to space, and then trim to clean up erroneous underscores.
 		my @tmp=();
-		# THIS ALL FEELS SO CLUNKY, THERE MUST BE A MORE PERLY, CLEAVER WAY
+		# THIS ALL FEELS SO CLUNKY, THERE MUST BE A MORE PERLY, CLEVER WAY
 		while ( my $b_and =shift(@b_parts)) {
-		    $b_and=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
-		    #if ( $b_and =~ /_to_/x ) {
-		    #    die("WOW Really trying to get me arnt you!");			
-		    #}
-		    #push(@tmp,trim($b_and));
+		    #these three goofy lines removes leading/trailing undescores
+		    $b_and=~ s/_/ /xg;
 		    trim($b_and);
-		    $b_and=~ s/[ ]/_/xg;#clean structure name of dirty elements replacing them for underscores.
+		    $b_and=~ s/[ ]/_/xg;
 		    my @b_endpoints=split("_to_",$b_and);
-
 		    # can we operate on all array elements at once. No we cant.
-		    if ( 0 ) {
-			#@b_endpoints=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
-			#trim(@b_endpoints);
-		    } else {
-			if ( scalar(@b_endpoints)>2 ) {
-			    die ("Bad range! more than two endpoints");
+		    if ( scalar(@b_endpoints)>2 ) {
+			die ("Bad range! more than two endpoints");
+		    }
+		    my @range=();
+		    my $bname;
+		    use Scalar::Util qw(looks_like_number);
+		    for(my $be=0;$be<=$#b_endpoints;$be++){
+			# convert underscore to spaces, then trim to remove any leading/trailling spaces.
+			$b_endpoints[$be]=~ s/_/ /xg;
+			trim($b_endpoints[$be]);
+			#my ($base,$num) = $b_endpoints[$be] =~ /^(.*?)([0-9]+)$/x;
+			my ($base,$num) = $b_endpoints[$be] =~ /^([^0-9]+)(.*)$/x;
+			if ( looks_like_number($num) ) {
+			    push(@range,$num);
+			} else {
+			    push(@range,-1);
 			}
-			my @range=();
-			my $bname;
-			use Scalar::Util qw(looks_like_number);
-			for(my $be=0;$be<=$#b_endpoints;$be++){
-			    $b_endpoints[$be]=~ s/_/ /xg;#clean structure name of dirty elements replacing them for underscores.
-			    trim($b_endpoints[$be]);
-			    #my ($base,$num) = $b_endpoints[$be] =~ /^(.*?)([0-9]+)$/x;
-			    my ($base,$num) = $b_endpoints[$be] =~ /^([^0-9]+)(.*)$/x;
-			    if ( looks_like_number($num) ) {
-				push(@range,$num);
-			    } else {
-				push(@range,-1);
-			    }
-			    if ( defined $base ) { $bname=$base;} else { 
-				die("range error ontology line:".$o_entry->{"t_line"}."\n");}
-			}
-			#dump(@b_endpoints);
-			#printf("$bname%i ",($range[0] .. $range[1]));
-			$bname=~s/[ ]/_/xg;
-			for(my $v=$range[0];$v<=$range[$#range];$v++){
-			    if ( $v>0 ){
-				push(@tmp,sprintf("%s%i",$bname,$v));
-			    } else {
-				push(@tmp,$bname);
-			    }
+			if ( defined $base ) { $bname=$base;} else { 
+			    die("range error ontology line:".$o_entry->{"t_line"}."\n");}
+		    }
+		    $bname=~s/[ ]/_/xg;# convert sapces back to underscores
+		    for(my $v=$range[0];$v<=$range[$#range];$v++){
+			if ( $v>0 ){
+			    push(@tmp,sprintf("%s%i",$bname,$v));
+			} else {
+			    push(@tmp,$bname);
 			}
 		    }
 		}
-		#print("branch: $branch_name \n");
 		push(@onto_levels,@tmp);
 		# foreach onto_level add tnum to the tnum lookup
 		for my $ol (@tmp) {
@@ -1855,7 +1876,9 @@ sub cleanup_ontology_levels {
 		} else {
 		    printd(95,"Using order lookup for $branch_name\n");
 		    my $a_tnum=$onto_hash->{"order_lookup"}->{$branch_name};
-		    if ($a_tnum ne $tnum && $debug_val>=45) {
+		    if ($a_tnum ne $tnum 
+			&& $tnum ne "" 
+			&& $debug_val>=45) {
 			print("AttemptedLevelOverride!".$o_entry->{"Name"}.
 			      ": branch_name=$branch_name tnum=\"$a_tnum\" is not \"$tnum\"\n");
 		    }
@@ -1890,15 +1913,16 @@ sub cleanup_ontology_levels {
 	# onto super_nums, the superstructures with their number if they've got one. Only the first number found will be use. 
 	# onto branches, once we have the other two components we'll try to back calculate the ontology lookup.
     }
-    # dump($onto_hash->{"LevelAssignments"});exit;
-    # dump($seen);
+
+    #dump($onto_hash->{"LevelAssignments"});die;
+    #dump($seen);die;
     if( scalar(@onto_error_msgs) ) {
 	warn (join("\n",@onto_error_msgs));
     }
-    # dump(@onto_errors);
-    # exit;
+    #dump(@onto_errors);
+    #die;
     #dump($onto_hash);
-
+    #die;
     # NOW WE NEED TO RE_CREATE THE BRANCHES.
     # What order of operations should we use here....
     # foreach line,
@@ -2167,7 +2191,8 @@ sub cleanup_ontology_levels {
 	    #if(exists($o_entry->{sprintf("Level_%i",$ln+1)}) ) {
 	    my $level_string=sprintf("Level_%i",$ln);
 	    if ($ln>$cur_depth) {
-		print($o_entry->{"Name"}.": KILL LEVEL $level_string\n") if ($debug_val>=45);
+		#print($o_entry->{"Name"}.": KILL LEVEL $level_string\n") if ($debug_val>=45);
+		print($o_entry->{"Name"}.": Remove $level_string\n") if ($debug_val>=45);
 		delete $o_entry->{$level_string};
 	    } else {
 		#$o_entry->{$level_string}=$onto_hash->{"order_lookup"}->{$super_structs[$ln-1]}.$super_structs[$ln-1];
@@ -2301,7 +2326,7 @@ sub cleanup_ontology_levels {
 }
 
 sub compare_onto_lines {
-    # compares two hashes and an optional ignore list, returning the differing keys, or [<|>]key  for missing keys 
+    # compares two hashes and an optional ignore list, returning a hash of the differing keys, or [<|>]key  for missing keys 
     my ($L_1, $L_2,@ignore_list)=@_;
 
     
