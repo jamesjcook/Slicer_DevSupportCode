@@ -55,7 +55,7 @@ use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_consta
 use text_sheet_utils;
 #use xml_read qw(xml_read);
 our %opt;
-if (! getopts('d:c:h:m:o:t:', \%opt||$#ARGV>=0)) {
+if (! getopts('d:c:g:h:m:o:t:', \%opt||$#ARGV>=0)) {
     # (d)ebug (c)olor_table (h)ierarchy (m)rml_in (o)utput (t)ype_of_renaming
     die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (Clean|Name|Structure|Abbrev))?";
 }
@@ -69,14 +69,15 @@ if (! getopts('d:c:h:m:o:t:', \%opt||$#ARGV>=0)) {
 #Abbreviation
 
 #my $ontology_inpath=$ARGV[0];
-my $p_ontology_in=$opt{"h"};#$opt{""};
-#my $p_mrml_in=$ARGV[1];
-my $p_mrml_in=$opt{"m"};
-#my $p_mrml_out=$ARGV[2];
+my $p_ontology_in=$opt{"h"};# ontology path in
+my $p_ontology_out=$opt{"g"} if exists($opt{"g"}); #ontolgy path out
+#my $p_mrml_in=$ARGV[1];   
+my $p_mrml_in=$opt{"m"};    # mrml path in 
+#my $p_mrml_out=$ARGV[2];   # mrml path out
 my $p_mrml_out=$opt{"o"};
 #my $rename_type=$ARGV[3];
-my $rename_type=$opt{"t"};
-my $p_color_table_in=$opt{"c"};
+my $rename_type=$opt{"t"};  
+my $p_color_table_in=$opt{"c"};#color table out
 my $model_prefix="Model_";
 $debug_val=20;
 if ( exists $opt{d}) {
@@ -110,8 +111,12 @@ if ( ! defined $p_mrml_out ) {
 my ($Tp,$Tn,$Te)=fileparts($p_color_table_in,3);
 my $p_color_table_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 
-($Tp,$Tn,$Te)=fileparts($p_ontology_in,3);
-my $p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
+if ( ! exists($opt{"g"}) ) {
+    ($Tp,$Tn,$Te)=fileparts($p_ontology_in,3);
+} else {
+    ($Tp,$Tn,$Te)=fileparts($p_ontology_out,3);
+}
+$p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
 my $p_ontology_structures_out=$Tp.$Tn."_".$rename_type."_Lists_out".$Te;
 my $p_ontology_levels_out=$Tp.$Tn."_".$rename_type."_Levels_out".$Te;
 my $p_ontology_assignment_out=$Tp.$Tn."_".$rename_type."_assignment_out".$Te;
