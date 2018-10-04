@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # Create label lookup files from avizo atlas.xml files.
-# fix nifti header of labelfield saved out of avizo.
+# 
 use strict;
 use warnings;
 use Cwd;
@@ -13,6 +13,7 @@ use lib split(':',$RADISH_PERL_LIB);
 use pipeline_utilities;
 use civm_simple_util qw(activity_log load_file_to_array get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
 
+die "This code is obsolete! proces_xx.pl sohuld be created/updated, see human brainstem for starter.";
 ###
 # are we on james's computer or not.
 ###
