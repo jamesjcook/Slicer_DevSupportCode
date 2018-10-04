@@ -1,290 +1,329 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
+use Carp qw(cluck confess croak carp);
+use Data::Dump qw(dump);
+use Env qw(RADISH_PERL_LIB WORKSTATION_HOME WKS_SETTINGS WORKSTATION_HOSTNAME ANTSPATH FSLDIR FSLOUTPUTTYPE); # root of radish pipeline folders
 if (! defined($RADISH_PERL_LIB)) {
     print STDERR "Cannot find good perl directories, quiting\n";
     #exit $ERROR_EXIT;
 }
 use lib split(':',$RADISH_PERL_LIB);
 use pipeline_utilities;
-use civm_simple_util qw(activity_log load_file_to_array get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
-my $data_path="DataLibrariesHuman/130827-2-0/v2017-12-13";
-#my $update_name="20170209_update";
-my $update_name="20171211_update";
-my $label_file_name="Labels_Dec_11_17-final"; 
-my $ontology_name="civm_human_brainstem_v0.66_ontology";  
-my $ontology_name_out="civm_human_brainstem_v0.68_ontology"; 
-my $update_model_file="models_update20180209";
+use civm_simple_util qw(activity_log load_file_to_array get_engine_constants_path printd file_update file_mod_extreme whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
+my $data_path="DataLibrariesHuman/130827-2-0/v2018-06-20";
 
-my $debug_val=75;# when doing new things, 75 is a good debug value as it will allow us to proceeeede with errors.
+# Alternatively, get last nii in place?
+my $reference_image="$data_path/Reg_S64550_labels.nii.gz";
+
+my $update_name="20180620_update";
+my $label_file_name="Labels_June_20_18-8";
+my $ontology_name="civm_human_brainstem_v0.67_ontology";  
+my $ontology_name_out="civm_human_brainstem_v0.68_ontology";
+my $update_model_file="models_update_20180620_2";
+
+# make our feedback directory where we'll dump a bunch op debugging output.
+my $feedback_dir="${data_path}/${update_name}/_feedback";
+if ( ! -d $feedback_dir) { `mkdir ${feedback_dir}`; }
+
+my $debug_val=20;# when doing new things, 75 is a good debug value as it will allow us to proceeeede with errors.
 my $DEBUGGING="-d $debug_val";
+print "This script is mostly obsolete!!!! Large swaths are ignored\n";
 
-###
-# create label list
-###
 use Cwd;
 my $dir = getcwd;
 if ( ! -d "$data_path/$update_name/" ) {
     print "Missing dir:$data_path/$update_name/\n";
 }
-chdir "$data_path/$update_name/";
-print "$dir\n";
-print "$dir/create_label_list.pl\n";
-my $c="$dir/create_label_list.pl";
-my $out=runner($c);
-chdir($dir);
-my $reprocess="No";
-#$reprocess="yes";
+my $reprocess=0;#or 1 for true
+
+###
+# find ants
+###
+if ( not defined $ANTSPATH ) {
+    $ANTSPATH="/FAKE_PATH_FOR_SCRIPT";
+}
+if ( "$ANTSPATH" eq '' ) {
+    $ANTSPATH="/FAKE_PATH_FOR_SCRIPT";
+}
+if  ( ! -d "$ANTSPATH" ) {
+    $ANTSPATH="/Volumes/workstation_home/ants_20160816_darwin_11.4/antsbin/bin/";
+}
+if ( ! -d "$ANTSPATH" ) { 
+    $ANTSPATH="/Volumes/workstation_home/usr/bin/";
+}
+###
+# create label lookup txt file, tag each label with its value in the name, 
+###
+# This whole concept is messy,
+#--Lets skip it and only get the xml converted names.
+# .../VoxPortSupport/amira-to-slicer-lbl.pl -xmlin /tmp/$xmlname > ${ln}.atlas.txt`;
+# sed -E \'/^[1-9]+/ s/^([0-9]+)[ ](_[0-9]+_)?(.*$)/\1 _\1_\3/\''." ${ln}.atlas.txt > ${ln}.txt
+# .../VoxPortSupport/slicer-to-avizo.pl < ${ln}.txt > ${ln}_hf.atlas.xml`;
+{
+    #folder path
+    my $fp="$data_path/$update_name";
+    my $labelfile="$fp/$label_file_name.am";
+    #=`find $fp -maxdepth 1 -iname \"*am\" -exec basename \{\} \\;`;chomp($labelfile);    
+    my ($UNUSED,$ln,$le)=fileparts($labelfile,2);
+    if ( not defined $ln || $ln eq '' ) {
+        $ln='*';
+    }
+    #my $xmlname=`ls -tr $fp/$ln*xml|head -n 1|basename`;chomp($xmlname);
+    my $xmlname="$label_file_name.atlas.xml";
+    #	my $cmd="/Users/james/svnworkspaces/VoxPortSupport/slicer-to-avizo.pl < $stage2_color > $processed_xml";
+    my $script="/Users/james/svnworkspaces/VoxPortSupport/amira-to-slicer-lbl.pl";
+    my $xml=$fp.'/'.$xmlname;
+    my $txt=$fp.'/'."${ln}.atlas.txt";
+    my @input=($script,$xml);
+    my @output=($txt);
+    my $cmd="$script -xmlin $xml > $txt";
+    run_on_update($cmd,\@input,\@output,$reprocess);
+    #
+    # "fix" label nifti header.
+    #
+    # This is somewhat optional, however we provide dsistudio loading helpers,
+    # SO we want to make sure the labels come up legit when loaded.
+    # For the time being, this code is NOT responsible for setting up the 
+    # right label file. It only fixes the one it found, and then goes on its way.
+    my $avizo_nii="$fp/${label_file_name}.nii";
+    my $ants_nii="$fp/.${label_file_name}_a.nii.gz";
+    # Intentionally, and CONFUSINGLY we are going to use the same name for label file that
+    # has the right header info on it, just putting it in a sub folder. FSL LIKES TO FORCE GZ!!!
+    my $fsl_ext=".nii";
+    if ($FSLOUTPUTTYPE =~ /NIFTI_GZ/xi) {
+        $fsl_ext=".nii.gz";
+    }
+    my $fsl_nii="${feedback_dir}/${label_file_name}$fsl_ext";
+    #print("creating antsified header on labels\n");
+    # MUST FIND REFERENCE FILE!!!!, Previous Labels is ideal!
+    #However other matching size images work well. 
+    # ANTS HEADER UPDATE COMMANDS BREAK THE DATA. FSL can recover with fslmaths add 0
+    # Alternatively, run load_untouch, save_untouch in matlab.
+    @input=($avizo_nii,$reference_image);
+    @output=($ants_nii);
+    $cmd="$ANTSPATH/CopyImageHeaderInformation $reference_image $avizo_nii $ants_nii 1 1 1";
+    my @cmd_out=run_on_update($cmd,\@input,\@output);
+    # because this operation is so immuteable we'll transfer the timestamp.
+    if (scalar(@cmd_out)){
+        timestamp_copy($avizo_nii,$ants_nii);
+    } else {
+        print("Ants labels already available\n");
+    }
+
+    #print("using antslabels to create fsl ones at \"correct\" bitdepth\n");
+    @input=($ants_nii);
+    @output=($fsl_nii);
+    $cmd="$FSLDIR/bin/fslmaths $ants_nii -add 0 $fsl_nii  -odt char";
+    @cmd_out=run_on_update($cmd,\@input,\@output);
+    # originally thought it'd be good to timestamp copy this, 
+    # however we have now fixed the header, and kept the original name, so that'll make this confusing.
+    if (scalar(@cmd_out)){
+    #timestamp_copy($ants_nii,$fsl_nii);
+    } else {
+        print("fsl fixed labels already available\n");
+    }
+    
+}
 # Generate ModelHierachy.mrml and update lookup table with Hierarchy information from hierarchy spreadsheet.
 # We use this updated lookup table for the abbreviations and name versions.
 {
     # file older than conversion...
     # ot(older than) is -M file1 > -M file2 (originally thought it'd be <).
     # generate modelhierarchy with the full structure names from the csv
+    # rename type
+    my $rt="Structure";
     my $in_mrml="${data_path}/${update_model_file}.mrml";
-    my $out_t_mrml="${data_path}/${update_name}/ModelHierarchy.mrml";
-    my $out_s_mrml="${data_path}/${update_name}/ModelHierarchy_Structure.mrml";
-    my $out_a_mrml="${data_path}/${update_name}/ModelHierarchy_Abbrev.mrml";
-    #my $out_n_mrml="${data_path}/${update_name}/ModelHierarchy_name.mrml"; # unused.
-    my $in_o_csv="${data_path}/${update_name}/${ontology_name}.csv";
-    my $out_o_csv="${data_path}/${update_name}/${ontology_name}_Structure_out.csv";
-    my $stage2_csv="${data_path}/${update_name}/${ontology_name}_fix.csv";
-    my $in_color="${data_path}/${update_name}/${label_file_name}.atlas.txt";
-    my $out_color="${data_path}/${update_name}/${label_file_name}.atlas_Structure_out.txt";
-    my $stage2_color="${data_path}/${update_name}/${label_file_name}_fix.txt";
+    # structure mrml used for updating spreasheets and stuff.
+    my $out_s_mrml="${feedback_dir}/"
+        ."ModelHierarchy_${rt}.mrml";
+    # temp mrml to be stripped of excess keys and turned into our final product.
+    my $out_t_mrml="${data_path}/${update_name}/"
+        ."ModelHierarchy.mrml";
+
+    # abbrev_mrml
+    #my $out_a_mrml="${data_path}/${update_name}/"
+    #    ."ModelHierarchy_Abbrev.mrml";
+    
+    my $in_o_csv="${data_path}/${update_name}/"
+        ."${ontology_name}.csv";
+    # out ontology will have had color and value updated by the input color table.
+    my $out_o_csv="${feedback_dir}/"
+        ."${ontology_name}_${rt}_out.csv";
+
+    my $in_color="${data_path}/${update_name}/"
+        ."${label_file_name}.atlas.txt";
+    # out_color will have had names udpated by information in the ontology.
+    my $out_color="${data_path}/${update_name}/"
+        ."${label_file_name}.atlas_${rt}_out.txt";
+    #  updated xml after we merge info from ontology.
+    my $feedback_xml="${feedback_dir}/"
+        ."${label_file_name}.atlas.xml";
+
+    # Stage 2 is where we prepare our files for final use, 
+    # The stage2 files only exists if the the stage1 outputs were updated.
+    my $stage2_onto_name="${ontology_name}_cleaned";
+    my $stage2_csv="${data_path}/${update_name}/"
+        ."${stage2_onto_name}.csv";
+    my $stage2_color="${feedback_dir}/"
+        ."${label_file_name}_lookup.txt";
+
+    # final output mrml
+    my $out_f_mrml="${data_path}/${update_name}/".
+        "ModelHierarchy_modelfile.mrml";
+    my $mrml_endpoint="${data_path}/models.mrml";
+
+    my $in_tract_mrml="${data_path}/".
+        "tractography_update.mrml";
+    # to prevent inplace crashes while tractography is still broken, we will
+    # not update the tractography.mrml file in use. 
+    my $out_tract_mrml="${data_path}/".
+        "tractography_update_clean.mrml";
+    
+    # dsi_studio label names
+    my $dsi_studio_label_index="${feedback_dir}/".
+        "${label_file_name}.txt";
+    
     ###
-    # check inputs area available
+    # Clean up discrepancies between ontology and models/labels
     ###
-    if ( ! -f $in_o_csv
-	 || ! -f $in_color
-	 || ! -f $in_mrml ) {
-	if ( ! -f $in_o_csv ){ print "missing:".$in_o_csv."\n"; }
-	if ( ! -f $in_color){  print "missing:".$in_color."\n"; }
-	if ( ! -f $in_mrml ) { print "missing:".$in_mrml."\n"; }
-	exit; 
+    my $cmd='';
+    #my @input=("$in_mrml","$in_o_csv","$in_color");
+    my $script="./ontology_hierarchy_creator.pl";
+    my @input=($script,$in_mrml,$in_o_csv,$in_color);
+    # there are other outputs, but they're more or less opaque
+    #my @output=("$out_s_mrml");# there are other outputs, but they're more or less opaque
+    my @output=($out_s_mrml);
+    $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_s_mrml -m $in_mrml -h $in_o_csv -g $out_o_csv -c $in_color -t $rt";
+    # new run function emulating make file behavior.
+    run_on_update($cmd,\@input,\@output);
+    #
+    # check if output was updated as expected.
+    #
+    # This shouldnt be necessary, however the ontology_hierarchy_creator is not particularly compliant.
+    my @f=@input;push(@f,@output);
+    my $lf=file_mod_extreme(\@f,'new');
+    if ($lf ne $out_s_mrml) {
+        print "HIERARCHY FAIL\n 
+        latest:$lf\n
+        is n e\n
+        ${out_s_mrml}\n";
+        print( (-M $in_o_csv)."\n");
+        print( (-M $out_s_mrml)."\n");
+        print "$cmd\n";
+        die;
     }
-    if ( ( ! -f $out_s_mrml || $reprocess eq "yes" )
-	 || ( -M $out_s_mrml > -M $in_mrml )
-	 || ( -M $out_s_mrml > -M $in_o_csv )
-	 || ( -M $out_s_mrml > -M $in_color ) ) {
-	if ( ! -f $out_s_mrml ){ print "unprocessed\n"; }
-	if ( $reprocess eq "yes"){ print "reprocess yes\n"; }
-	if ( -f $out_s_mrml ) {
-	    if ( -M $out_s_mrml > -M $in_mrml  ) { print "newer mrml\n"; }
-	    if ( -M $out_s_mrml > -M $in_o_csv ) { print "newer csv\n"; }
-	    if ( -M $out_s_mrml > -M $in_color ) { print "newer txt"; }
-	}
-	my $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_s_mrml -m $in_mrml -h $in_o_csv -c $in_color -t Structure";
-	print("$cmd\n");
-	`$cmd`;
-	if ( ! -f $out_color   
-	     || ( -M $out_color > -M $in_o_csv )
-	     || ( -M $out_color > -M $in_mrml  )
-	     || ( -M $out_color > -M $in_color )
-	    ) {
-	    print "HIERARCHY FAIL\n";
-	    print "no out color $out_color, or its older than input csv $in_o_csv.\n";
-	    print( (-M $out_color)."\n");
-	    print( (-M $in_o_csv)."\n");
-	    print "$cmd\n";
-	    exit;
-	}
-	$cmd="cp -p $out_color $stage2_color";
-	`$cmd`;
-	# Copy new hierachy table to fix bad one
-	$cmd="cp -p $out_o_csv ${data_path}/${update_name}/${ontology_name}_fix.csv";
-	`$cmd`;
-	$ontology_name="${ontology_name}_fix";
-	# Generate ModelHierarchy_Abbrev(just in case).
-	if ( ( ! -f $out_a_mrml ) 
-	     || ! -f $stage2_color
-	     || ( $reprocess = "yes" ) 
-	     || ( -M $out_a_mrml > -M $out_s_mrml ) ) {
-	    $cmd=`./ontology_hierarchy_creator.pl $DEBUGGING -o $out_a_mrml -m $in_mrml -h $in_o_csv -c $stage2_color -t Abbrev `;
-	    `$cmd`;
-	}
-    }
-    # create new atlas.xml from structure out.(could also use the copy called "fix"
-    my $processed_xml="${data_path}/${update_name}/${label_file_name}_hfe.atlas.xml";
-    if( ( ( ! -f $processed_xml ) || ( $reprocess eq "yes" )  )
-	|| ( -M $processed_xml > -M $stage2_color ) ) {
-	print("creating processed_xml $processed_xml\n");
-	#print( (-M $processed_xml)."\n".(-M $stage2_color)."\n");
-	my $cmd="/Users/james/svnworkspaces/VoxPortSupport/slicer-to-avizo.pl < $stage2_color > $processed_xml";
-	print($cmd."\n");
-	`$cmd`;
+    #
+    # check if color table changed, if it did, create new xml, and copy to stage 2.
+    #
+    use File::Compare;
+    if (compare($in_color,$out_color) == 0) {
+        print("No color table update, will not copy");
+        $stage2_color=$in_color;
     } else {
-	print("processed xml ready\n");
+        # IF we updated the color table, .... ? who cares?
+        # We havnt produced our final output anyway, lets make that now no matter what.
+        my $did_cp=file_update($out_color,$stage2_color);
+        my $script="/Users/james/svnworkspaces/VoxPortSupport/slicer-to-avizo.pl";
+        @input=($script,$out_color);
+        @output=($feedback_xml);
+        # .../VoxPortSupport/slicer-to-avizo.pl < ${ln}.txt > ${ln}_hf.atlas.xml`;
+        $cmd="$script < $out_color ";
+        my @cmd_out=run_on_update($cmd,\@input,\@output);
+        if (scalar(@cmd_out)>0 ) { write_array_to_file($feedback_xml,\@cmd_out); 
+        } else {
+            #die("No update?");
+        }
     }
-	
-
-    my $fixed_label_file="${data_path}/${update_name}/${label_file_name}_hf.nii";
-    my $processed_label_file="${data_path}/${update_name}/${label_file_name}_hfe.nii";
-    if ( ! -l $fixed_label_file ){  
-	my $cmd="mv $fixed_label_file $processed_label_file ".
-	    "&& ln -s $processed_label_file $fixed_label_file";
-	`$cmd`;
+    #
+    # check if ontology changed, if it did, copy to stage 2.
+    #
+    use File::Compare;
+    if (compare($in_o_csv,$out_o_csv) == 0) {
+        print("No ontology update, will not copy");
+        $stage2_csv=$in_o_csv;
     } else {
-	print "Already linked in\n";
+        my $did_cp=file_update($out_o_csv,$stage2_csv);
     }
+    @input=($script,$out_s_mrml,$stage2_csv,$stage2_color);
+    @output=($out_t_mrml);
+    # Copy new hierachy table to use later, and update ontology name.
+    $rt="Name";
+    $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_t_mrml -m $in_mrml -h $stage2_csv -c $stage2_color -t $rt";
+    run_on_update($cmd,\@input,\@output);
 
-    if ( ( ( ! -f $out_t_mrml ) || ( $reprocess eq "yes" ) )
-	 || ( -M $out_t_mrml > -M  $out_s_mrml ) ) {
-	my $cmd="./ontology_hierarchy_creator.pl $DEBUGGING -o $out_t_mrml -m $in_mrml -h $in_o_csv -c $stage2_color -t Name";
-	`$cmd`;
-    }
-
-
-    # Get current labels name.
-    my $l_p=`ls -t ${data_path}/*labels*nii*|head -n1`;# Only get newest label file
-    chomp($l_p);
-    #my $l_n=`basename $l_p`;
-    my ($x,$l_n,$e)=fileparts($l_p,2);
-    # move old labels and lookup out of way
-    #my $t_f="${data_path}/${l_n%%.*}_lookup.txt"; # text file
-    my $t_f=$x.$l_n."_lookup.txt";
-    if ( -e $t_f  ){
-	if ( ! -l "$t_f" ) {
-	    my $ts=gts($t_f);
-	    my $a_f=$data_path.$l_n."_lookup".$ts.".txt";
-	    if ($ts ne "" &&  -e $a_f ){
-		print "moving $t_f -> $a_f\n";
-		`mv $t_f $a_f`;
-	    } else {
-		print("label lookup hasnt changed.\n");
-		`rm $a_f`;
-	    }
-	} else {
-	    print "Linky label lookup, destroying\n";
-	    `unlink $t_f`; #${data_path}/
-	}
-    } # else, we've probably already moved out of the way.
-    my $ts=gts($l_p);
-    chomp($ts);
-    #my $old_labelfile="${data_path}/${l_n%%.*}$ts.${ln#*.}";
-    my $old_labelfile=$x.$l_n.".".$ts.$e;
-    if ( $l_p =~ /$ts/x ) { #the timestamp is in our name, eg, its already been moved.
-	#print(join("\n",($l_n,$l_p,$old_labelfile)));
-	print("Already moved $l_n\n");
-	$old_labelfile=$l_p;
-    } else {
-	`mv $l_p $old_labelfile`;
-    }
-    use Cwd;
-    my $od=fastcwd();
-    chdir "${data_path}/";
-    my ($ul_p,$ul_d,$ul_n,$ul_e);
-    $ul_p=`ls ${update_name}/${label_file_name}_hfe.nii*`;chomp($ul_p);
-    ($ul_d,$ul_n,$ul_e)=fileparts($ul_p,2);
-    {
-	# link up new files
-	#use File::pushd;
-	#pushd fastcwd();#`pwd`;
-	
-	#my $durr=pushd("${data_path}/");
-	my ($t_p,$t_n,$t_e)=fileparts($t_f,2);
-	if (! -e $t_n.$t_e ) {
-	    print "Copying new lookup in \n";
-	    `cp -p ${update_name}/${label_file_name}_fix_Name_out.txt $t_n$t_e`;
-	} else {
-	    print "Error in preserving old files(lookup).\n";
-	}
-	# if no gzippped labels, then create them from our input lebelfile.
-	if (! -e "$l_n*" ) {# need to fix this l_n to include appropriate ext
-	    if ($ul_e !~ /gz$/x ) {
-		print "$ul_p is not gzipped.\n";
-		`gzip -c ${ul_p} > $l_n.nii.gz`;
-		my $oldfile_name=`basename $old_labelfile`; chomp($oldfile_name);
-		print "checking if labels are different\n";
-		print "$data_path diff $oldfile_name ${l_n}.nii.gz\n";
-		my $DIFF=`diff "$oldfile_name" "${l_n}.nii.gz"`;chomp($DIFF);
-		if ("$DIFF" eq "") {
-		    print"New label file in place\n";
-		} else {
-		    `echo rm $oldfile_name`;
-		}
-	    }
-	} else {
-	    print "Error in preserving old files(labels)."
-	}
+    #
+    # remove excess mrml pieces using the mrml_key_strip
+    #
+    $script="./mrml_key_strip.pl";
+    @input=($script,$out_t_mrml);
+    @output=($out_f_mrml);
+    $cmd="$script $out_t_mrml";
+    my @ks_out=run_on_update($cmd,\@input,\@output);
+    if (scalar(@ks_out)){
+        print("updated final mrml file $out_f_mrml\n");
     }
     
-    # Copy useful files to feed back directyory to be put on workstatiosn. 
-    if ( ! -d "${update_name}/_feedback" ) { `mkdir ${update_name}/_feedback`; }
-    if ( $ul_e !~ /gz$/ ) { # we want this ungzipped.
-	print("New not gzipped, just sending it to feedback\n");
-	`cp -vpn $ul_p ${update_name}/_feedback/`;
-    } else {
-	if ( ! -f "${update_name}/_feedback/${label_file_name}_hfe.nii"  ) { 
-	    `gunzip -c $ul_p > ${update_name}/_feedback/${label_file_name}_hfe.nii`;
-	}
-    }
-    my $input_file="${update_name}/${ontology_name}_Structure_out.csv";
-    my $dest_file="${update_name}/_feedback/${ontology_name_out}.csv";# start at new destination.
-    # check diff of new file to input.
-    my $DIFF=`diff ${update_name}/${ontology_name}.csv ${update_name}/${ontology_name}_Structure_out.csv`;chomp $DIFF;
-    if ( "$DIFF" ne "" ) {
-	print "DIFFERENT ($DIFF)\n\n\t Label update happened!\n";
-    } else { 
-	print "SAME\n";
-	$input_file="${update_name}/${ontology_name}.csv";
-	if ( -f $dest_file ) {
-	    `rm $dest_file`;
-	}
-	$dest_file="${update_name}/_feedback/${ontology_name}.csv";
-	$ontology_name_out=$ontology_name;
-    }
-    copy_if_older("$input_file","$dest_file");
-    copy_if_older("${update_name}/${ontology_name}_Structure_Lists_out.headfile","${update_name}/_feedback/${ontology_name_out}_Structure_to_leaf.headfile");
-    copy_if_older("${update_name}/${ontology_name}_Structure_Lists_out.csv","${update_name}/_feedback/${ontology_name_out}_Structure_to_leaf.csv");
-    copy_if_older("${update_name}/${label_file_name}_fix_Abbrev_out.txt","${update_name}/_feedback/${label_file_name}_abbrev_labels_lookup.txt" );
-    copy_if_older("${update_name}/${label_file_name}_fix_Name_out.txt","${update_name}/_feedback/${label_file_name}_name_labels_lookup.txt ");
-    copy_if_older("${update_name}/${label_file_name}.atlas_Structure_out.txt","${update_name}/_feedback/${label_file_name}_labels_lookup.txt");
-    copy_if_older("${update_name}/${label_file_name}_hfe.atlas.xml","${update_name}/_feedback/${label_file_name}_hfe.atlas.xml");
-    chdir $od;#popd;
+    #
+    # remove excess mrml pieces using the mrml_key_strip
+    #
+    $script="./mrml_key_strip.pl";
+    @input=($script,$in_tract_mrml);
+    @output=($out_tract_mrml);
+    $cmd="$script $in_tract_mrml modelfile $out_tract_mrml";
+    @ks_out=run_on_update($cmd,\@input,\@output);
     
-#if [ ! -f 
-    `./mrml_key_strip.pl $out_t_mrml`;
+    #
+    # move last mrml file out of the way.
+    #
+    if ( -f $mrml_endpoint ) {
+        my $orig_modelfile=move_to_timestamp($mrml_endpoint);
+        if (! -f $orig_modelfile || -f $mrml_endpoint ) {
+            die "Problem moving $mrml_endpoint to $orig_modelfile";
+        }
+    }
+    # copy final mrml to the endpoint.
+    my $cp_mrml=file_update($out_f_mrml,$mrml_endpoint);
 
-    
-    # Move old model file to timestamped version so we're not destructive.
-    my $orig_modelfile=move_to_timestamp("${data_path}/models.mrml");
-    if ( -f "${data_path}/${update_name}/ModelHierarchy_modelfile.mrml" ) {
-	`mv ${data_path}/${update_name}/ModelHierarchy_modelfile.mrml ${data_path}/models.mrml`;
-    } elsif( $orig_modelfile ne "" ) {
-	`mv $orig_modelfile ${data_path}/models.mrml`;
+    #
+    # strip color parts of the colortable to give a name index in dsistudio
+    #
+    @input=($stage2_color);
+    @output=($dsi_studio_label_index);
+    $cmd="awk '{print \$1\" \"\$2}' $stage2_color";
+    my @l_names=run_on_update($cmd,\@input,\@output);
+    if (scalar(@l_names)>0 ) {
+        print("writing $dsi_studio_label_index\n");
+        write_array_to_file($dsi_studio_label_index,\@l_names);
+    } else {
+        #die("No update?");
     }
+    die;
+}
+sub run_idealist {
+    funct_obsolete("run_idealist","pipeline_utilities::run_on_update");
+    return run_on_update(@_);
 }
 
-sub runner {
-    # this doesnt quite work : (
-    # the idea was a run and watch like we're right in the shell.
-    # the inital problem was the capture missed stderr, 
-    # this is what was thrown in here in ~30 seconds, but it doesnt operated as expected.
-    my($c,@a)=@_;
-    my @out;
-    my $pid = open(my $PH, "$c 3>&1 1>&2 2>&3 3>&-|");
-    while (<$PH>) {
-	print $_;
-	push(@out,$_);
+sub file_extreme_alldef {
+    # newest (sort{-M $a <=> -M $b }@$a_ref)[0];
+    # oldest (sort{-M $b <=> -M $a }@$a_ref)[0];
+    my ($a_ref,$dir)=@_;
+    if ( $dir eq "new" ){
+        return (sort{-M $a <=> -M $b }@$a_ref)[0];
+    }elsif ($dir eq "old"){
+        return (sort{-M $b <=> -M $a }@$a_ref)[0];
+    } else {
+        die;
     }
-    return @out;
 }
+sub file_extreme {
+    funct_obsolete("file_extreme","civm_simple_util::file_mod_extreme");
+    return file_mod_extreme(@_);
+}
+
 sub copy_if_older {
-    my ($f1,$f2) = @_;
-    if ( ! -f $f1 ) {
-	print("missing file \n\t$f1\n");
-	return; }
-    my $docp=1;
-    if ( -f $f2 ) { 
-	if ( -M $f1 >= -M  $f2 ) {
-	    print ( ( -M $f1 )."ot".(-M $f2)."\n");
-	    $docp=0;
-	} 
-    }
-    if ($docp){`cp -p $f1 $f2`;}
-    return;
+    return file_update(@_);
 }
 sub move_to_timestamp {
     my ($inf,@la)=@_;
@@ -292,15 +331,17 @@ sub move_to_timestamp {
 	print("No existing file to move\n");
 	return "";
     } 
-    my $ts=gts($inf);
+    #my $ts=gts($inf);
+    my $ts_r=get_timestamp($inf);
+    my $ts=$ts_r->{"st_mtime"};
     `mv \"$inf\" \"$inf.$ts\"`;
     if ( -e $inf ) {
-	print "Error in preserving old files.\n";
-	exit;
+	confess "Error in preserving old files.\n";
     }
     return "$inf.$ts";
 }
 sub gts {
+    #get timestamp
     my ($inf,@la)=@_;
     if ( ! -f $inf ){
 	print("NOFILE\n");
@@ -311,30 +352,3 @@ sub gts {
 }
 
 __END__
-function copy_if_older ()
-{
-    input_file=$1;
-    dest_file=$2;
-    DIFF="Missing";
-    if [ -f $dest_file ]; then 
-	DIFF=$(diff $input_file $dest_file);
-    fi
-    if [ "$DIFF" != "" ]; then
-	#diff, now check older. 
-	if [ -f $dest_file ]; then
-	    if [ $input_file -nt $dest_file ]; then
-		ts=`stat -f %Sm -t %Y-%m-%d_%H:%M:%s%z $dest_file`;
-	 	mv -v $dest_file $dest_file$ts
-	    fi;
-	fi;
-	cp -vpn $input_file $dest_file;
-    else
-	#same
-	echo  "No copy, files are the same.($input_file, $dest_file)";
-    fi
-    return;
-}
-
-}
-__END__  
-
