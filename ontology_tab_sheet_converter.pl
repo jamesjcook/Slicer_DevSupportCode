@@ -20,6 +20,8 @@
 use strict;
 use warnings;
 
+die "This code is obsolete.";
+
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
 use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
