@@ -1,8 +1,10 @@
 #!/usr/bin/perl
-# ontology tab sheet converter.pl
+# ontology heiarachy creator.pl
 # used to rename structures in slicer MRML file to their complete ontology name or to their Abbreviation.
 # uses the ontology tab sheet to generate "safe" filenames, and assumes the structures are named that in the mrml file.
-# checks the hard coded label look up table to make sure the name listed there matches the name in MRML file. 
+# checks the hard coded label look up table to make sure the name listed there matches the name in MRML file.
+#
+# CLEARLY DOES TOO MUCH AND NOT WELL ENOUGH TO BE LEFT ALONE!!!!.
 # 
 # loads tab sheet and operates over every line of that file. 
 #   renames modelhierarchynodes to the name of interest as it goes.
@@ -13,7 +15,8 @@
 # clears nodes besides the modelhierarchy and dispaly, then saves mrml as mrml_template.
 #
 # TODO 
-# for tractograyphdisplay, some intelligent way, copy 3n_l settings to other tratography nodes. (specifically copy percentage display, and color by segment.)
+# for tractograyphdisplay, some intelligent way, copy 3n_l settings to other tractography nodes. 
+#     (specifically copy percentage display, and color by segment.)
 # lets make tractography repair a second file. 
 
 
@@ -21,82 +24,72 @@ use strict;
 use warnings;
 use Data::Dump qw(dump);
 use Clone qw(clone);
-use Getopt::Std;# qw(getopts);
+use Getopt::Std;
 use File::Basename;
-#use String::Util qw(trim); $branch_name=trim($branch_name)
 use Text::Trim qw(trim);
 use List::MoreUtils qw(uniq);
+
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
-use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
+use Env qw(RADISH_PERL_LIB WKS_SETTINGS); # root of radish pipeline folders
 if (! defined($RADISH_PERL_LIB)) {
     print STDERR "Cannot find good perl directories, quiting\n";
     exit $ERROR_EXIT;
 }
-# if (! defined($RADISH_RECON_DIR) && ! defined ($WORKSTATION_HOME)) {
-#     print STDERR "Environment variable RADISH_RECON_DIR must be set. Are you user omega?\n";
-#     print STDERR "   CIVM HINT setenv RADISH_RECON_DIR /recon_home/script/dir_radish\n";
-#     print STDERR "Bye.\n";
-#     exit $ERROR_EXIT;
-# }
-# if (! defined($RECON_HOSTNAME) && ! defined($WORKSTATION_HOSTNAME)) {
-#     print STDERR "Environment variable RECON_HOSTNAME or WORKSTATION_HOSTNAME must be set.";
-#     exit $ERROR_EXIT;
-# }
 
 use lib split(':',$RADISH_PERL_LIB);
 require Headfile;
 #require hoaoa;
 #import hoaoa qw(aoa_hash_to_headfile);
 #use hoaoa qw(aoa_hash_to_headfile display_header display_complex_data_structure);
-#require shared;
 require pipeline_utilities;
-use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);di
+use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 use text_sheet_utils;
-#use xml_read qw(xml_read);
 our %opt;
 if (! getopts('d:c:g:h:m:o:t:', \%opt||$#ARGV>=0)) {
-    # (d)ebug (c)olor_table (h)ierarchy (m)rml_in (o)utput (t)ype_of_renaming
+    # (c)olor_table input
+    # (d)ebug_value
+    # (g) hierarchy out
+    # (h)ierarchy tabsheet/csv in
+    # (m)rml_in
+    # (o)utput_mrmlfile
+    # (t)ype_of_renaming Structure(no-change), abbrev, name.
     die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (Clean|Name|Structure|Abbrev))?";
 }
-#-h hierarchy.csv
-#-m inmrml.mrml
-#-c colortabl.txt
-#-o output.mrml
 
 ### What about different column names for the same things? Should that be supported, or should we just bludgeon things here.
 #my $shorthand="Abbrev"
 #Abbreviation
-
-#my $ontology_inpath=$ARGV[0];
-my $p_ontology_in=$opt{"h"};# ontology path in
-my $p_ontology_out=$opt{"g"} if exists($opt{"g"}); #ontolgy path out
-#my $p_mrml_in=$ARGV[1];   
-my $p_mrml_in=$opt{"m"};    # mrml path in 
-#my $p_mrml_out=$ARGV[2];   # mrml path out
-my $p_mrml_out=$opt{"o"};
-#my $rename_type=$ARGV[3];
-my $rename_type=$opt{"t"};  
-my $p_color_table_in=$opt{"c"};#color table out
-my $model_prefix="Model_";
+# p-> path
+my $p_color_table_in=$opt{"c"};
 $debug_val=20;
-if ( exists $opt{d}) {
-    $debug_val=$opt{d};
-}
+$debug_val=          $opt{"d"} if exists($opt{"d"});
+my $p_ontology_out=  $opt{"g"} if exists($opt{"g"});
+my $p_ontology_in=   $opt{"h"};
+my $p_mrml_in=       $opt{"m"};
+my $p_mrml_out=      $opt{"o"};
+my $rename_type=     $opt{"t"};  
 
-my $p_mrml_out_template;
+my $model_prefix="Model_";
+#my $p_mrml_out_template;
+
 if ( ! defined $p_mrml_in || ! defined $p_color_table_in || ! defined $p_ontology_in ) { 
     print("specifiy at least:\n\t(-h hierarchical_ontology)\n\t(-m mrml)\n\t(-c color_table).\nOptionally specify\n\t(-o output mrml)\n\t(-t  rename type [Clean|Name|Structure|Abbrev])\n");
     if ( ! defined $p_ontology_in  ) {
-    	print ("ERROR: no ontology specified\n"); }
+    	print("ERROR: no ontology specified\n");
+        print("\t This should be created manually in spreadsheet editor of your choice and saved as a tab separated csv.\n"); }
     if ( ! defined $p_mrml_in ) {
-	print ("ERROR: no mrml specified\n"); }
+	print("ERROR: no mrml specified\n");
+        print("\t This is saved from slicer after loading up the label field and color table and generating models.\n"
+              ."\t It could be created from commandline call to slicer if we get that advanced in the future\n"); }
     if ( ! defined $p_color_table_in ) {
-    	print ("ERROR: no color_table specified\n"); } 
-    exit;
+    	print("ERROR: no color_table specified\n");
+        print("\t This should come from your atlas.xml file from Avizo/Amira. \n"
+              ."\t Alternatively it could be created by the matlab am conversion code.\n"); } 
+    die;
 }
 if ( ! defined $rename_type ) { 
-    $rename_type='Structure';
+    $rename_type='Name';
 }
 if ( $rename_type !~/(Clean|Name|Structure|Abbrev)/x ) {
     die "Rename type $rename_type not in (Clean|Name|Structure|Abbrev)";
@@ -108,23 +101,37 @@ if ( ! defined $p_mrml_out ) {
     print("Auto mrml out will be \"$p_mrml_out\".\n") ;
 }
 
+# Temp path vars, to be reused constantly.
 my ($Tp,$Tn,$Te)=fileparts($p_color_table_in,3);
-my $p_color_table_out=$Tp.$Tn."_".$rename_type."_out".$Te;
+my $p_color_table_out=           $Tp.$Tn."_".$rename_type."_out".$Te;
 
 if ( ! exists($opt{"g"}) ) {
     ($Tp,$Tn,$Te)=fileparts($p_ontology_in,3);
+    $p_ontology_out=            $Tp.$Tn."_".$rename_type."_out".$Te;
+    
 } else {
     ($Tp,$Tn,$Te)=fileparts($p_ontology_out,3);
 }
-$p_ontology_out=$Tp.$Tn."_".$rename_type."_out".$Te;
-my $p_ontology_structures_out=$Tp.$Tn."_".$rename_type."_Lists_out".$Te;
-my $p_ontology_levels_out=$Tp.$Tn."_".$rename_type."_Levels_out".$Te;
-my $p_ontology_assignment_out=$Tp.$Tn."_".$rename_type."_assignment_out".$Te;
-my $p_ontology_structures_out_hf=$Tp.$Tn."_".$rename_type."_Lists_out.headfile";
+# set additional output paths....
+my $p_ontology_components_out=   $Tp.$Tn."_".$rename_type."_Components_out".$Te;
+my $p_ontology_components_out_hf=$Tp.$Tn."_".$rename_type."_Components_out.headfile";
+my $p_ontology_levelvoting_out=  $Tp.$Tn."_".$rename_type."_LevelVoting_out".$Te;
+my $p_ontology_assignment_out=   $Tp.$Tn."_".$rename_type."_assignment_out".$Te;
+
+my @input_errors=();
+for my $f (($p_mrml_in,$p_color_table_in,$p_ontology_in)) {
+    if ( ! -e $f ) {
+        push(@input_errors,"missing $f");
+    }
+}
+if(scalar(@input_errors)){
+    croak(join("\n",@input_errors));
+}
+
 print "MRML = $p_mrml_in -> $p_mrml_out\n";
 print "Color = $p_color_table_in -> $p_color_table_out\n";
 print "Hierarchy = $p_ontology_in -> $p_ontology_out\n";
-#exit;
+
 ###
 # color_table parse.
 ###
@@ -174,14 +181,14 @@ $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 
 
 $header->{"Splitter"}=$splitter;
-$header->{"LineFormat"}='^#.*';
+$header->{"CommentFormat"}='^#.*';
 $header->{"Separator"}=" ";
 
 
 my $c_table=text_sheet_utils::loader($p_color_table_in,$header);
 #dump($c_table);
 
-### BIG PILE OF DEBUG PRINTS CONTROLELD BY THIS TRIPLICATE VARIABLE, TURN ANY ON TO DUMP SPECIFIED CONTENTS AND STOP.
+### BIG PILE OF DEBUG PRINTS CONTROLELD BY THIS ARRAY VARIABLE, TURN ANY ON TO DUMP SPECIFIED CONTENTS AND STOP.
 my ($d_abr,$d_nam,$d_str,$d_line)=(0,0,0,0);
 my $Tr;
 if ($d_abr){
@@ -208,22 +215,22 @@ if ($d_abr||$d_nam||$d_str||$d_line){
     $Tr=$c_table->{"t_line"};
     printf("%i\n",scalar(keys %{$c_table->{"t_line"}}));
     printf("%i\n",scalar(keys %$c_table));
-    exit;
+    die;
 }
-	#
+
 #my $parser=xml_read($p_mrml_in);
 #my $mrml_data=xml_read($p_mrml_in);
     #print("THE END\n");exit;
 if  ($d_abr||$d_nam||$d_str){
-    exit;}
+    die;}
 
 my ($mrml_data,$xml_parser)=xml_read($p_mrml_in,'giveparser');
 
 if(0){
-    dump($xml_parser);
+    dump($xml_parser);die;
 }
 if(0){
-    dump($mrml_data);
+    dump($mrml_data);die;
 }
 
 
@@ -251,11 +258,13 @@ $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 
 my $h_info={};
 $h_info->{"Splitter"}=$splitter;
-$header->{"LineFormat"}='^#.*';
-#$header->{"Separator"}=" ";# for the ontology, we let it auto find the separator in the loader.
+$header->{"CommentFormat"}='^#.*';
+# for the ontology, we let it auto find the separator in the loader.
+
+#$header->{"Separator"}=" ";
+#$header->{"Separator"}="	";
 my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
-#dump( $o_table);
-#exit;
+#print("\n\n\n");sleep 3;dump( $o_table);die;
 
 
 
@@ -265,16 +274,11 @@ my $null;
 $ontology=cleanup_ontology_levels($o_table,$null);
 
 if ( 0 ) {
-dump(%{$ontology->{"Hierarchy"}});
-dump(%{$ontology->{"Branches"}});
-dump(%{$ontology->{"Twigs"}});
-dump(%{$ontology->{"SuperCount"}});
-dump(%{$ontology->{"SuperLevel"}});
-dump(%{$ontology->{"order_lookup"}});
-
-exit;
-
-
+    my @parts=qw/Hierarchy Branches Twigs SuperCount SuperLevel order_lookup/;
+    for my $part (@parts) {
+        dump($part,%{$ontology->{$part}});
+    }
+    die;
 }
 # if (keys %{ $ontology } ) {
 #     print ("YES-keys\n");
@@ -282,7 +286,7 @@ exit;
 # if (! keys %{ $ontology } ) {
 #     print ("NO-keys\n");
 # }
-#exit;   
+#die;
 ####
 # New method, we have our text spreadsheets loaded.
 ####
@@ -291,17 +295,10 @@ exit;
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 my ( $c_count, $o_count )= (0,0);
 
-if ( 1 ) { # take advantage of always having the t_line field, and its guarenteed unique. 
-    $c_count=scalar(keys %{$c_table->{"t_line"}});
-    $o_count=scalar(keys %{$o_table->{"t_line"}});
-} else {
-    foreach (keys %$c_table){
-	$c_count=max((scalar(keys %{$c_table->{$_}})),$c_count );
-    }
-    foreach (keys %$o_table){
-	$o_count=max((scalar(keys %{$o_table->{$_}})),$o_count );
-    }
-}
+# take advantage of always having the t_line field, and its guarenteed unique. 
+$c_count=scalar(keys %{$c_table->{"t_line"}});
+$o_count=scalar(keys %{$o_table->{"t_line"}});
+
 my $ONTOLOGY_INSERTION_LINE=$o_count;# next insertion point.
 while ( exists($o_table->{"t_line"}->{$ONTOLOGY_INSERTION_LINE}) ){
     $ONTOLOGY_INSERTION_LINE++;
@@ -320,12 +317,13 @@ if ($o_count!=$c_count) {
     warn("uneven color_table to ontology count.");
 }
 print("\n\n");
-
 my $rootHierarchyNodeID="vtkMRMLModelHierarchyNode";#vtkMRMLModelHierarchyNode1 #vtkMRMLHierarchyNode1"
 my $rootHierarchyNode={};
 {
-    $rootHierarchyNode=$mrml_data->{"MRML"}->{"ModelHierarchy"}[0]; # first modelhierarchy node
-    #$rootHierarchyNode=$mrml_data->{"MRML"}->{"ModelHierarchy"}[$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}]; # last modelhierarchy node
+    # first modelhierarchy node
+    $rootHierarchyNode=$mrml_data->{"MRML"}->{"ModelHierarchy"}[0];
+     # last modelhierarchy node
+    #$rootHierarchyNode=$mrml_data->{"MRML"}->{"ModelHierarchy"}[$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}];
     # while the current root has a parent, its not really the root... so we should get its parent.
     while (exists ($rootHierarchyNode->{"parentNodeRef"}) ) {
 	print("Looking up ".$rootHierarchyNode->{"parentNodeRef"}."\n");
@@ -352,15 +350,10 @@ my $rootHierarchyNode={};
 }
 if (! keys %{ $rootHierarchyNode} ) {
     print("Root Node EMPTY!!!");
-    exit;
+    die;
 }
-#dump($rootHierarchyNode);
-#exit;
-#my $mrml_data=mrml_find_by_name($mrml_data->{"MRML"},"whiteSPCmatter","ModelHierarchy");
-#my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter","ModelHierarchy");
-#my $mrml_data=mrml_find_by_name($mrml_data,"whiteSPCmatter");#,"ModelHierarchy");
-#display_complex_data_structure($mrml_data,'  ');
-#display_complex_data_structure(\@refs,'  ')
+
+#dump($rootHierarchyNode);die;
 
 my @mrml_nodes_loaded=mrml_find_by_id($mrml_data,".*"); # could i just scalar that for how i'm doing things?
 print("mrml ".(scalar(@mrml_nodes_loaded))." nodes loaded.\n");
@@ -369,34 +362,34 @@ print("mrml ".(scalar(@mrml_nodes_loaded))." nodes loaded.\n");
 #my @mrml_nodes=mrml_find_by_name($mrml_data->{"MRML"},".*","Model");
 my @mrml_nodes=mrml_find_by_id($mrml_data->{"MRML"},".*","Model");
 print("\tModel's:".(scalar(@mrml_nodes))."\n");
-
 ###
 # set up the name splitter for the slicer model output names
 ###
-# grouping of the regex is what determines the output. Output MUST be specified in the order splitte->{'Regex'} will return.
-$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
-#$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';# taking this regex
-#$splitter->{"Regex"}='^.*$';# taking this regex
-#$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.*?)(?:___?(.+))?)$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
+# grouping of the regex is what determines the output.
+# Output MUST be specified in the order splitter->{'Regex'} will return.
+# this is good for the RBSC, and didnt work for the mouse!
+# for names with format MODELPREFIX_NUMBER_ABBREV__NAME
+$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';
+# taking this regex
+#$splitter->{"Regex"}='^.*$';
+# taking this regex, which is good for the RBSC, didnt work for the mouse!
+#$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.*?)(?:___?(.+))?)$';
 # HUMAN BRAINSTEM SPLITTER FAILURE!!!!.
-$splitter->{"Regex"}="^($model_prefix([0-9]+)_".'_.+?_(.*))$';# taking this regex, which is good for the RBSC, didnt work for the mouse!
+##########$splitter->{"Regex"}="^($model_prefix([0-9]+)_".'(.*))$';
 #Model_5__5_Fouth_ventricle.vtk
 # this is the splitter input pre 201802 revision
 #$splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
 #$splitter->{"Input"}=[qw(  )];# reformulate structure var, keeping original in Model
 # this is the splitter output pre 201802 revision
-#$splitter->{"Output"}=[qw(Value Structure Abbrev Name)];  # generating these four
-$splitter->{"Output"}=[qw(Structure Value Name)];  # generating these three
+$splitter->{"Output"}=[qw(Value Structure Abbrev Name)];  # generating these four
+##########$splitter->{"Output"}=[qw(Structure Value Name)];  # generating these three
 
 ###
 #foreach model in mrml_data
 ###
 my @missing_model_messages;
-my @found_via_ontology_color;
 my $processed_nodes=0;
 my $do_unsafe=0;
-my %l_1;
-my %onto_hash;
 print("---\n");
 print("\tBegin model processing!\n");
 print("---\n\n\n");
@@ -424,20 +417,19 @@ foreach my $mrml_model (@mrml_nodes) {
 	@n_a{@field_keys} = @field_temp;
 	if (length($msg)>0){
 	    print($msg." But we've fudged it.\n");}
+        defined $n_a{$_} or delete $n_a{$_} for keys %n_a;
     } else {
 	warn($msg." and couldnt recover. expected".scalar(@field_keys).", but we got ".scalar(@field_temp));
 	dump(@field_keys,@field_temp);
 	next;
     }
-    #dump(\%n_a);die;
     if ( $n_a{"Value"}==0 ){ # this throws an error becuase it may not be numeric... but it works anyway.
-	dump(%n_a);
+	dump(\%n_a);
 	print("Special exception for value 0\n");
 	next;
     }
-    
     #### NEED TO ENSURE THE n_a HASH IS CORRECT HERE.
-    # theoritically we've run the cleanup function ensuring the ontology is correct.
+    # theoretically we've run the cleanup function ensuring the ontology is correct.
     #
     # For poorly formed entries we can have unfilled or missing fields!
     #
@@ -448,6 +440,7 @@ foreach my $mrml_model (@mrml_nodes) {
     if(exists($n_a{"Name"}) && ! exists($n_a{"Abbrev"}) ){
 	$n_a{"Abbrev"}=$n_a{"Name"};
     }
+    # WARNING: n_a{"Structure"} is not necessarily the same as other fields. This is BAD name!!!!
     if(!exists($n_a{"Name"})
        || ! exists($n_a{"Value"})
        || ! exists($n_a{"Abbrev"})
@@ -461,29 +454,33 @@ foreach my $mrml_model (@mrml_nodes) {
     # get the color_table info by value, name, abbrev, or structure
     ###
     # we sort throught the possible standard places it could be.
-    # adding second chance via color lookup.
     my ($c_entry,$o_entry);
-    my @c_test=qw(Value Name Abbrev Structure); # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    # that lets us test for our most trustworthy and likely connected information.
+    # In the case of models, the value should be always be righteos, and the same as the color table.
+    my @c_test=qw(Value Name Abbrev Structure); 
     my $tx;
     do {
 	$tx=shift(@c_test) ;
     } while(defined $n_a{$tx} 
 	    && ! exists ($c_table->{$tx}->{$n_a{$tx}} )
 	    && $#c_test>0 );
-    
     if( exists($n_a{$tx}) && exists($c_table->{$tx}->{$n_a{$tx}}) ) {
 	$c_entry=$c_table->{$tx}->{$n_a{$tx}};
     } else {
 	print("$mrml_name\n\tERROR, No color table Entry found!\n");
 	push(@missing_model_messages,"No color table entry".$mrml_name);
-	#dump(%n_a);
     }
     ### 
     # get the ontology_table info by abbrev, or value, or Name
     ###
     # we sort throught the possible standard places it could be.
     # adding second chance via color lookup.
-    my @o_test=qw(Name Abbrev Structure Value);  # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    # sets the test order, instead of just using the collection order of splitter->{'Output'}.
+    # that lets us test for our most trustworthy and likely connected information.
+    # In the case of models, the Name should be the same as the color table, 
+    # and should be resolveable in the ontology. Unfortunately value is the least reliable in the ontology. 
+    my @o_test=qw(Name Abbrev Structure Value);  
     do {
 	$tx=shift(@o_test) ;
     } while(defined $n_a{$tx} 
@@ -532,8 +529,9 @@ foreach my $mrml_model (@mrml_nodes) {
     # if we failed to find one of the entries, dump the info here.
     #
     if ( not defined($o_entry) || not defined ($c_entry) ) {
-	warn("Model $mrml_name missing ontology or color entries");
+	cluck("Model $mrml_name missing ontology or color entries");
 	if ( ! defined($o_entry) && ! defined($c_entry) ) {
+            # Both undefined, then define the colortable.
 	    warn("INVENTING INFORMATION for ".$mrml_name);
 	    $c_entry=\%{clone %n_a};
 	    $c_entry->{"t_line"}=$COLOR_TABLE_INSERTION_LINE;
@@ -557,6 +555,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	    }
 	}
 	if ( ! defined($o_entry) && defined($c_entry) ) {
+            # Has colortable, but not ontology.
 	    print("FOUND C_ENTRY MISSING O_ENTRY\n") if $debug_val>=35;
 	    dump($c_entry) if $debug_val >= 35;
 	    # ADD the o_entry to the o_table here!!!
@@ -572,52 +571,26 @@ foreach my $mrml_model (@mrml_nodes) {
 	    # now for each key in the o_table add a 0 to our o_entry, THEN add our o_entry to each point of the o_table.
 	    my @o_columns;
 	    if ( 1 )  {
+                # we only have select entries colums we know are legit, so we dont want the whole header worth.
 		@o_columns=qw(Name Abbrev Structure t_line);
 	    } elsif ( 0 ) {
 		@o_columns=keys(%{$o_entry});
 	    } else {
-		@o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
+		@o_columns=keys %{$o_table->{'Header'}};
 		foreach (@o_columns) {
 		    if ( ! exists($o_entry->{$_} ) ) {
 			$o_entry->{$_}=0;
 		    }
 		}	    
 	    }
-	    # for each column update the ontology.
-	    for my $col (@o_columns) {
-	    #my $col="t_line"; {
-		if ( ! exists($o_table->{$col}->{$o_entry->{$col}} ) ) {
-		    $o_table->{$col}->{$o_entry->{$col}}=$o_entry;
-		    printf("Added o_entry to index $col at $o_entry->{$col}\n");
-		    #sleep_with_countdown(2);
-		} else {
-		    die("$col has entry for $o_entry->{$col}");
-		}
-		if ( ! exists($o_table->{$col}) ){ 
-		    die("o_table missing Index: $col\n");
-		}
-	    }
-	    #dump($o_entry);
+            text_sheet_utils::insert_item($o_table,$o_entry,@o_columns);
 	}
  	if ( defined($o_entry) && ! defined($c_entry) ) {
 	    print("FOUND O_ENTRY MISSING C_ENTRY\n") if $debug_val>=35;
 	    dump($o_entry) if $debug_val>=35;
-	    # ADD the c_entry to the c_table here!!!
 	    $c_entry=\%{clone $o_entry};
 	    my @c_columns=qw(Value Name Abbrev Structure t_line);
-	    for my $col (@c_columns) {
-	    #my $col="t_line"; {
-		if ( ! exists($c_table->{$col}->{$c_entry->{$col}} ) ) {
-		    $c_table->{$col}->{$c_entry->{$col}}=$c_entry;
-		    printf("Added c_entry to index $col at $c_entry->{$col}\n");
-		    #sleep_with_countdown(2);
-		} else {
-		    die("$col has entry for $c_entry->{$col}\n" ) ;
-		}
-		if ( ! exists($c_table->{$col}) ){ 
-		    die("c_table missing Index: $col\n");
-		}
-	    }
+            text_sheet_utils::insert_item($c_table,$c_entry,@c_columns);die"test";
 	}
 	#next;
     } else {
@@ -672,7 +645,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	     || $c_entry->{"Value"}==809
 	    ){
 	} else {
-	    #exit;
+	    #die;
 	}
     }
     #next;
@@ -705,7 +678,7 @@ foreach my $mrml_model (@mrml_nodes) {
     my $hierarchy_template;
     if (! defined ($alt_name) ) { die("NAME FAILURE");}
     my @vtkMRMLModelDisplayNodes;
-    #print("dumping right now just forstesting\n");dump ($parent_ref); exit;
+    #print("dumping right now just forstesting\n");dump ($parent_ref); die;
     #mrml_attr_search($mrml_data,"id",$parent_ref->{"displayNodeID"}."\$","ModelDisplay");# this may not be what i'm looking to do.
 
     if ( exists ($mrml_model->{"displayNodeRef"} ) ) {
@@ -738,7 +711,7 @@ foreach my $mrml_model (@mrml_nodes) {
     #dump($hierarchy_template);
     my $sort_val=$#{$mrml_data->{"MRML"}->{"ModelHierarchy"}}; # current count of modelhierarchy nodes
     $hierarchy_template->{"sortingValue"}=$sort_val;
-    #exit;
+    #die;
     #  while level_next exists, check for level, add it
     # grep {/Level_[0-9]+$/} keys %$o_entry;
     #dump($o_entry);
@@ -876,14 +849,17 @@ foreach my $mrml_model (@mrml_nodes) {
 		#$hierarchy_template = \%{clone $parent_ref};
 		#dump(%$ref);
 	    } else {
-		#dump($ontology->{"Twigs"});
-		dump(keys(%{$ontology->{"Branches"}}));
-		dump($ontology->{"Branches"}->{$tnum.$branch_name});
-		dump($ontology->{"Hierarchy"});
-		die ("DEADEND with $branch_name, orphaned branch?") unless $debug_val>70;
+                if ( $branch_name !~ /UNSORTED/  ) {
+                    # we dont need to be notified about the UNSORTED branch, that is its purpose
+                    dump(keys(%{$ontology->{"Branches"}}));
+                    dump($ontology->{"Branches"}->{$tnum.$branch_name});
+                    dump($ontology->{"Hierarchy"});
+                    carp ("DEADEND with $branch_name, orphaned branch?");
+                }
 	    }
-	    if ( ! exists ($ref->{$tnum.$branch_name}) ) {
-		print("ERRROR: Branch not available\n");
+	    if ( ! exists ($ref->{$tnum.$branch_name}) 
+                 && $branch_name !~ /UNSORTED/  ) {
+		print("ERROR: Branch ($tnum$branch_name) not available\n");
 		dump (%$ref);
 	    }
 	    # Check if this node has been defined already.
@@ -897,7 +873,7 @@ foreach my $mrml_model (@mrml_nodes) {
 		$node_exists_bool=1;
 	    }
 	}
-	#print($tnum.$branch_name." HRD EXIT\n"); exit;
+	#print($tnum.$branch_name." HRD EXIT\n"); die;
 	#print($tnum.$branch_name." SKIPPER\n"); next;
 	if ( ! exists($ref->{$tnum.$branch_name}) || ! $node_exists_bool ) {
 	    # clever way to build hierarchy hash on fly. The hierarchy hash is just a holder for the structure.
@@ -973,7 +949,7 @@ foreach my $mrml_model (@mrml_nodes) {
     #dump(%onto_hash);
     #dump(%{$ref});
     #dump(%l_1);
-    #exit;
+    #die;
     # next;
     my $node=$mrml_model;
     #display_complex_data_structure($node);
@@ -984,10 +960,12 @@ foreach my $mrml_model (@mrml_nodes) {
     # Assign Structure to its parent node(s)
     #
     #    my $parent_hierarchy_node_id="BOGUS";
-    # this is currently the singular parent code. For multi-parentage, we'll have to duplicate the modelhierarchy entry for each alternate parent.
+    # this is currently the singular parent code. For multi-parentage,
+    # we'll have to duplicate the modelhierarchy entry for each alternate parent.
     my $mrml_node_id=$mrml_model->{"id"};    
     if ( defined $mrml_node_id  ) {
-	my @model_hierarchy_nodes=mrml_attr_search($mrml_data,"associatedNodeRef",'^'.$mrml_node_id.'$',"ModelHierarchy");
+	my @model_hierarchy_nodes=mrml_attr_search($mrml_data,  "associatedNodeRef",
+                                                   '^'.$mrml_node_id.'$',  "ModelHierarchy");
 	if(scalar(@model_hierarchy_nodes)>1){
 	    warn("Multiple Hierarchy Input Nodes");
 	}
@@ -1018,7 +996,7 @@ foreach my $mrml_model (@mrml_nodes) {
 		$mrml_model->{"name"}="$model_prefix${value}_$alt_name";
 	    }
 	}
-	#	dump(@parent_hierarchy_names);exit;
+	#	dump(@parent_hierarchy_names);die;
 	if ( exists($m_h_node->{"id"} ) ) {
 	    my $m_h_base_id=$m_h_node->{"id"};
 	    my $m_m_base_id=$mrml_model->{"id"};
@@ -1058,7 +1036,6 @@ foreach my $mrml_model (@mrml_nodes) {
 	    warn("NO ID FOR NODE!");
 	    dump($m_h_node);
 	}
-
     } else {
 	if (!scalar $mrml_model ){
 	    warn("OHh NOOOO node id not set ! Sleeping a bit while you look at this!");
@@ -1129,9 +1106,8 @@ printf("ontology built\n");
 mrml_to_file($mrml_data,'  ',0,'pretty','',$p_mrml_out);
 # for each line of color table?
 # get value, name|abbrev|structure(whichever we've requeseted) c_r, c_g, c_b, c_a
-printf("Dumping new color_table to $p_color_table_out\n");
 my @color_table_out=();
-my @fields=("Value", $rename_type,qw( c_R c_G c_B c_A));# this is a constant orde,r so this is ok, our ontology is not.
+my @fields=("Value", $rename_type,qw( c_R c_G c_B c_A));# this is a constant order, so this is ok, our ontology is not.
 my $test_line=0; # counter to help put lines back out in order.
 my $max_failures=200;
 while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) ) 
@@ -1153,6 +1129,7 @@ while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) )
     }
     $test_line++;
 }
+print("Writing new color_table to $p_color_table_out\n");
 write_array_to_file($p_color_table_out,\@color_table_out);
 #
 # Save ontology, and derrived listings
@@ -1161,16 +1138,15 @@ my @ontology_out=();
 #my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
 #@fields=qw(Structure Abbrev Level_1 Level_2 Level_3 Level_4 Value c_R c_G c_B c_A);# this was fine for the colortable as it had no header, but we can do better here.
 @fields=();
-#dump(%{$o_table->{"Header"}});#exit;
+#dump(%{$o_table->{"Header"}});#die;
 # this is the hash converstion code lets use it to build an inverse hash.. 
-my %h_o_hash;@h_o_hash{values(%{$o_table->{"Header"}})}=keys(%{$o_table->{"Header"}});#dump(%h_o_hash);#exit;
+my %h_o_hash;@h_o_hash{values(%{$o_table->{"Header"}})}=keys(%{$o_table->{"Header"}});#dump(%h_o_hash);#die
 foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERICAL OR THIS WOULDNT WORK AS EXPECTED.
     push(@fields,$h_o_hash{$idx});
 }
-#dump(@fields);exit;
+#dump(@fields);die;
 push(@ontology_out,join("\t",@fields)."\n");
 $test_line=0;
-printf("Dumping new ontology to $p_ontology_out\n");
 while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) ) 
        && ( $test_line < ( scalar(keys %{$o_table->{"t_line"}})+$max_failures ) ) ) {
     #printf("%i < %i\n ",$test_line, (scalar(keys  %{$o_table->{"t_line"}})+$max_failures) );
@@ -1178,67 +1154,6 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
     # so while we have less outputs than inputs, AND we havent tried 200 more times 
     if ( exists($o_table->{"t_line"}->{$test_line}) ){
 	my $o_entry=$o_table->{"t_line"}->{$test_line};
-	if ( 1 ) {
-	} else {
-	    # my $c_entry;
-	    # if ( ! defined $c_entry ){
-	    # 	$c_entry=$c_table->{"Value"}->{$o_entry->{"Value"}};
-	    # 	if ( defined($c_entry) && $debug_val>=45) {
-	    # 	    print("\tcolor by Value\n");
-	    # 	}#dump($c_entry);}
-	    # }
-	    # if ( ! defined $c_entry ){
-	    # 	$c_entry=$c_table->{"Structure"}->{$o_entry->{"Structure"}};
-	    # 	if ( defined($c_entry) && $debug_val>=45) {
-	    # 	    print("\tcolor by Structure\n");
-	    # 	    dump($o_entry);dump($c_entry);}
-	    # }
-	    # if ( ! defined $c_entry ){
-	    # 	$c_entry=$c_table->{"Name"}->{$o_entry->{"Name"}};
-	    # 	if ( defined($c_entry) && $debug_val>=45) {
-	    # 	    print("\tcolor by Name\n");
-	    # 	    dump($o_entry);dump($c_entry);}
-	    # }
-	    # if ( ! defined $c_entry ){
-	    # 	$c_entry=$c_table->{"Abbrev"}->{$o_entry->{"Abbrev"}};
-	    # 	if ( defined($c_entry) && $debug_val>=45) {
-	    # 	    print("\tcolor by Abbrev\n");
-	    # 	    dump($o_entry);dump($c_entry);}
-	    # }
-	    
-	    # if ( 0
-	    # 	 || $o_entry->{"Value"}==215
-	    # 	 || $o_entry->{"Value"}==634
-	    # 	 || $o_entry->{"Value"}==635
-	    # 	 || $o_entry->{"Value"}==761
-	    # 	 || $o_entry->{"Value"}==762
-	    # 	 || $o_entry->{"Value"}==764
-	    # 	 || $o_entry->{"Value"}==809
-	    # 	 || $o_entry->{"Value"}==811
-	    # 	 || $o_entry->{"t_line"}>=818
-	    # 	){
-	    # 	if ( defined($o_entry) ) {
-	    # 	}#dump($o_entry);}
-	    # 	if ( defined($c_entry) ) {
-	    # 	}#dump($c_entry);}
-	    # }
-	    # #$test_line++;
-	    # #next;
-	    # if (0 && ! defined $c_entry ){
-	    # 	my @c_vals=qw(c_R c_G c_B c_A);
-	    # 	#my @c_vals=qw(c_R c_G c_B);
-	    # 	@{$o_entry}{@c_vals}=(255) x scalar(@c_vals);
-	    # 	$o_entry->{"c_A"}=0;
-	    # 	$o_entry->{"Value"}=0;
-	    # 	print("Extranous ontology entry($o_entry->{Structure}:$o_entry->{t_line})!\n");
-	    # 	#sleep_with_countdown(2);
-	    # } else {
-	    # 	my @c_vals=qw(c_R c_G c_B c_A Value);
-	    # 	# set the o_entry color info to the c_table info.
-	    # 	#dump(@{$c_entry}{@c_vals});
-	    # 	@{$o_entry}{@c_vals}=@{$c_entry}{@c_vals};
-	    # }
-	}
 	my $line;
 	my @values;
 	my @bv_msg;
@@ -1266,6 +1181,7 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
     }
     $test_line++;
 }
+print("Writing new ontology to $p_ontology_out\n");
 write_array_to_file($p_ontology_out,\@ontology_out);
 
 my @super_structures_out=();
@@ -1304,35 +1220,28 @@ for my $super(@super_structs) {
     $line=sprintf("%s=%i:1,%s\n",$super,scalar(@val_output),join(" ",@val_output)); 
     push(@super_structures_hf,$line);
 }
-print("Writing meta structure componenets sheet $p_ontology_structures_out\n");
-write_array_to_file($p_ontology_structures_out,\@super_structures_out);
-print("Writing meta structure componenets headfile $p_ontology_structures_out_hf\n");
-write_array_to_file($p_ontology_structures_out_hf,\@super_structures_hf);
+print("Writing meta structure componenets sheet $p_ontology_components_out\n");
+write_array_to_file($p_ontology_components_out,\@super_structures_out);
+print("Writing meta structure componenets headfile $p_ontology_components_out_hf\n");
+write_array_to_file($p_ontology_components_out_hf,\@super_structures_hf);
 
-#sub lptr {
-#{
-#    my ($big_onto,$tree)=@_;
+#
+# save the level election info to a spreadsheet for debugging.
+#
 my @level_election=();
 @fields=();
 %h_o_hash=();
 @h_o_hash{values(%{$ontology->{"SuperLevel"}->{"Header"}})}=keys(%{$ontology->{"SuperLevel"}->{"Header"}});
-dump(%h_o_hash);#exit;
+dump(%h_o_hash);
 foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERICAL OR THIS WOULDNT WORK AS EXPECTED.
     push(@fields,$h_o_hash{$idx});
 }
-#dump(@fields);exit;
 push(@level_election,join("\t",@fields)."\tBestLevel\n");
-printf("Dumping new ontology levels to \n");
 for my $super(@super_structs) {
     # for all stuper structures, get their level votes, add the "BEST guess" column which is level of their highest count.
-
     my $l_entry=$ontology->{"SuperLevel"}->{$super};
-    
-    #if ( exists($o_table->{"t_line"}->{$test_line}) ){
-    #my $o_entry=$o_table->{"t_line"}->{$test_line};
     my $line;
     my @values;
-    #my @bv_msg;
     my $max_found=0;
     my $best_level=0;
     for (my $vn=0;$vn<=$#fields;$vn++){
@@ -1345,23 +1254,15 @@ for my $super(@super_structs) {
 		$max_found=$val;
 		$best_level=$fields[$vn];
 	    }
-	    #my ($onum,$name)=$val=~/^([0-9]+_)?(.*)$/x ;
-	    # If our value starts with number_
-	    #if ( (  defined($onum ) && defined($name)) 
-	    #&&(length($onum)>0 && length($name)>0) ) {
-	    #push(@bv_msg,"$fields[$vn]:$val ->$name");
-	    #$val=$name;
-	    #}
 	}
 	push(@values,$val);
     }
     push(@values,$best_level);
     $line=join("\t",@values)."\n";
     push(@level_election,$line);
-    #}
 }
-write_array_to_file($p_ontology_levels_out,\@level_election);
-#}
+print("Writing new ontology level voting to $p_ontology_levelvoting_out\n");
+write_array_to_file($p_ontology_levelvoting_out,\@level_election);
 
 #
 # dump the lines_to_struct info for debugging.
@@ -1372,7 +1273,7 @@ for my $line_num(@lines){
     if (exists($o_table->{"t_line"}->{$line_num}) ) {
 	my $o_entry=$o_table->{"t_line"}->{$line_num};
 	my @super_out;
-	if (   exists($o_entry->{"Value"})
+	if ( exists($o_entry->{"Value"})
 	       &&  $o_entry->{"Value"} !=0 ) {
 	    #@super_out=@{$ontology->{"line_to_struct"}->{"$line_num"}};
 	    if ( exists($ontology->{"line_to_struct"}->{"$line_num"}) ) {
@@ -1380,12 +1281,14 @@ for my $line_num(@lines){
 	    } else {
 		warn("Odd, no direct assignments for $o_entry->{t_line}");
 		dump($o_entry);
+                sleep 3;
 	    }
 	    unshift(@super_out,scalar(@super_out));
 	    my $line=sprintf("%s\t%s\n",$o_entry->{"Value"},join("\t",@super_out)); 
 	    push(@assignment_list,$line);#print($line);
 	} elsif ( exists($o_entry->{"Value"}) ) {
 	    print("line $line_num broken_value.\n");
+            dump($o_entry);
 	} else {
 	    warn("line $line_num invalid.");
 	}
