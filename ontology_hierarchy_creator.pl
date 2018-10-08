@@ -46,15 +46,16 @@ require pipeline_utilities;
 use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 use text_sheet_utils;
 our %opt;
-if (! getopts('d:c:g:h:m:o:t:', \%opt||$#ARGV>=0)) {
+if (! getopts('d:c:g:h:k:m:o:t:', \%opt||$#ARGV>=0)) {
     # (c)olor_table input
     # (d)ebug_value
     # (g) hierarchy out
     # (h)ierarchy tabsheet/csv in
+    # (k)ey column heading to split up, (the abbrev__name column);
     # (m)rml_in
     # (o)utput_mrmlfile
     # (t)ype_of_renaming Structure(no-change), abbrev, name.
-    die "$!: Option error, valid options, -h hierarchy.csv -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (Clean|Name|Structure|Abbrev))?";
+    die "$!: Option error, valid options, -h hierarchy.csv -k keycolumn -m input_mrml.mrml -c colortable.txt (-o output.mrml)? (-t (Clean|Name|Structure|Abbrev))?";
 }
 
 ### What about different column names for the same things? Should that be supported, or should we just bludgeon things here.
@@ -66,10 +67,19 @@ $debug_val=20;
 $debug_val=          $opt{"d"} if exists($opt{"d"});
 my $p_ontology_out=  $opt{"g"} if exists($opt{"g"});
 my $p_ontology_in=   $opt{"h"};
+my $input_column=    $opt{"k"} if exists($opt{"k"});
 my $p_mrml_in=       $opt{"m"};
 my $p_mrml_out=      $opt{"o"};
-my $rename_type=     $opt{"t"};  
+my $rename_type=     $opt{"t"};
 
+
+# Simple booleans to switch between name cleanup formats, paxinos or aba.
+my $PAXINOS_RULES=0;
+my $ABA_RULES=1;
+
+if (! defined $input_column) {
+    $input_column="Structure";
+}
 my $model_prefix="Model_";
 #my $p_mrml_out_template;
 
@@ -242,9 +252,15 @@ if(0){
 
 $splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
-$splitter->{"Input"}=[qw(Structure Structure)];# reformulate this var, keeping original in other
 
-
+# Ints not clear if splitter wants an array ref or what...
+# reformulate this var, keeping original in other
+# In our case, we can configure the input column thusly.
+#$splitter->{"Input"}=[qw(Structure Structure)];
+# reformulate var, keeping original in other
+# eg, ABA_abbrev_name is renamed(copied?) to Structure, and has Abbrev and Name derrived.
+#$splitter->{"Input"}=[qw(ABA_abbrev__name Structure)];
+$splitter->{"Input"}=[$input_column, "Structure"];
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 #### EXAMPLE OF FIRST LETTER OF EACH STR
 ###perl -wMstrict -le
@@ -262,7 +278,7 @@ $header->{"CommentFormat"}='^#.*';
 # for the ontology, we let it auto find the separator in the loader.
 
 #$header->{"Separator"}=" ";
-#$header->{"Separator"}="	";
+$h_info->{"Separator"}="	";# prefer tabs :) 
 my $o_table=text_sheet_utils::loader($p_ontology_in,$h_info);
 #print("\n\n\n");sleep 3;dump( $o_table);die;
 
@@ -614,7 +630,7 @@ foreach my $mrml_model (@mrml_nodes) {
     $c_entry->{"Abbrev"}   =$o_entry->{"Abbrev"};
     $c_entry->{"Structure"}=$o_entry->{"Structure"};
 
-
+    if ( 0 ) { #SPECAIL DEBUG PRINTS FOR HISTORICAL STRUCTURES AND DATA WITH ISSUES
     if ( 0
 	 || $c_entry->{"Value"}==215
 	 || $c_entry->{"Value"}==634
@@ -649,21 +665,23 @@ foreach my $mrml_model (@mrml_nodes) {
 	}
     }
     #next;
-    
+    }
     
     #if (! defined ($alt_name) ) {
     #$alt_name=$Abbrev;
     #$n_a{"Name"}=$Abbrev;
     #}
-
-    if ( 0) {#DISABLEDCURRENTLY
+    # set the o_entry color info to the c_table info.
+    #DISABLEDCURRENTLY
+    if ( 0) {
     my @c_vals=qw(c_R c_G c_B c_A Value);
+    # first effort using loop    
     #my $o_entry=$o_table;
     #foreach (@c_vals){
 	# set o_entry $_ to c_entry $_
 	#$o_entry->{"$_"}=$c_entry->{"$_"};
     #}
-    # set the o_entry color info to the c_table info.
+    # second effort using array assignment.
     #$o_entry->{@c_vals}=$c_entry->{@c_vals};
     @{$o_entry}{@c_vals}=@{$c_entry}{@c_vals};
     } #DISABLEDCURRENTLY
@@ -686,7 +704,6 @@ foreach my $mrml_model (@mrml_nodes) {
     } elsif ( exists ($parent_ref->{"displayNodeID"} ) ) {
 	@vtkMRMLModelDisplayNodes=mrml_attr_search( $mrml_data,"id",$parent_ref->{"displayNodeID"}.'$',"ModelDisplay");    # this gets the root hierarchy node's modeldisplaynode.
 	warn("WARN: Using root display node for template.");
-	
     } else {
 	warn("WARN: Had to just grab the first ModelDisplay due to missing root");
 	# if we dont have a parent node, then just get the first one, hope its the right thing.
@@ -735,7 +752,8 @@ foreach my $mrml_model (@mrml_nodes) {
     print("\t(\"".join("\", \"",@parts)."\")\n")  if $debug_val>=45;
     #next;
     my $ref;#=\%onto_hash;
-    my @parent_hierarchy_names=($parts[$#parts]);# In simple mode, there is only one parent hierarchy name.
+    # In simple mode, there is only one parent hierarchy nam.e
+    my @parent_hierarchy_names=($parts[$#parts]);
     if (keys %{ $ontology } ) {# if we're the new ontology in memory code.
 	if (exists($o_entry->{"DirectAssignment"}) ) {
 	    @parent_hierarchy_names=@{$o_entry->{"DirectAssignment"}};
@@ -770,8 +788,8 @@ foreach my $mrml_model (@mrml_nodes) {
     if (scalar(@parts)<1 ) {
 	die("NO PARTS TO ASSIGN ontology line:".$o_entry->{"t_line"}."\n");
     }
-    #dump(@parts);next;
-    my $level_show_bool=0; # bool to show what levels we've got when this loop ends. This is used to show error messages.
+    # bool to show what levels we've got when this loop ends. This is used to show error messages.
+    my $level_show_bool=0; 
     for(my $pn=0;$pn<=$#parts;$pn++){
 	# proccess the different levels of ontology, get the different ontology names, create a path to save the structure into.
 	#
@@ -896,6 +914,27 @@ foreach my $mrml_model (@mrml_nodes) {
 		#@nums=@nums[0..2]; $_ = int($_)/255 foreach @nums; # if would be good to get this to a min of 0.5 
 		@nums=@nums[0..2]; $_ = int($_)/127 foreach @nums;
 
+                # CHECK FOR STRUCTURE IN ONTOLOGY, WE MAY HAVE COLOR THERE FOR SUPER STRUCTURES.
+                my @o_test=qw(Name Abbrev Structure Value);
+                # name may be 
+                my @o_ptest=qw(ABA_abbrev__name ABA_name ABA_abbrev );
+                # ontology parent entry. 
+                my $op_entry={};
+                do {
+                    $tx=shift(@o_test);
+                } while(! exists ($o_table->{$tx}->{$branch_name} )
+                        && $#o_test>0 );
+                
+                if( exists($o_table->{$tx}->{$branch_name}) ) {
+                    $op_entry=$o_table->{$tx}->{$branch_name};
+                    $nums[0]=$op_entry->{"c_R"};
+                    $nums[1]=$op_entry->{"c_G"};
+                    $nums[2]=$op_entry->{"c_B"};
+                } else {
+                    print("$branch_name not in ontology, using random color\n");
+                }
+                
+                
 		# first element only...
 		#$model_display_template->{"color"}=sprintf("%0.0f ",@nums);
 		#$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f",
@@ -907,6 +946,7 @@ foreach my $mrml_model (@mrml_nodes) {
 		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
 							   ,0.25,0.25,0,25);
 	    } else {
+                # Hey what if we have a color already set? Why dont we check for that.
 		$model_display_template->{"color"}=sprintf("%0.0f %0.0f %0.0f"
 							   ,rand(1),rand(1),rand(1));
 	    }
@@ -1394,13 +1434,20 @@ sub cleanup_ontology_levels {
 	#
 	my @error_fields=();
 	my @conflicts;
+        # keys seen here should be Value,Structure,Name,t_line.
+        # this checks those fields 
 	for my $check_field (keys(%$seen)) {
-	    if ( ! exists($seen->{$check_field}->{$o_entry->{$check_field}})){ 
+            if ( ! exists($o_entry->{$check_field})  ) {
+                #warn("Line:$o_entry->{t_line} missing $check_field");
+                #dump($o_entry);die;
+                next;
+            }
+	    if ( exists($o_entry->{$check_field}) && ! exists($seen->{$check_field}->{$o_entry->{$check_field}}) ){ 
 		# not seen, no prob.
 		# $seen->{$check_field}->{$o_entry->{$check_field}} = ($o_entry->{$check_field});
 	    } else {
 		# Seen before, add conflicting line_numbers to the conflict list
-		push(@conflicts,@{$seen->{$check_field}->{$o_entry->{$check_field}}}); 
+		push(@conflicts,@{$seen->{$check_field}->{$o_entry->{$check_field}}}  );
 		if ($check_field ne "Value" || $o_entry->{"Value"} != 0 ) {
 		    # add to error listing ONLY when its not value==0.
 		    push(@onto_errors,$seen->{$check_field}->{$o_entry->{$check_field}});
@@ -1411,7 +1458,8 @@ sub cleanup_ontology_levels {
 	    }
 	    push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$o_entry->{"t_line"}); # add to seen arrays.
 	}
-	@conflicts=uniq(@conflicts); # for many dupe fields the same line could be reported again
+         # for many dupe fields the same line could be reported again
+	@conflicts=uniq(@conflicts);
 	my $auto_res=0;
 	my $check_count=scalar(@conflicts);
 	my $c_num=0;
@@ -1610,7 +1658,8 @@ sub cleanup_ontology_levels {
 	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
 	#my @levels=@parts;
 	my %l_p;# level preference holder for all the meta_structures for this link in ontology.
-	if (scalar(@parts)>0 ) {# with re-tooling of spreadsheet load, this should always have the same number of entries as colums
+        # with re-tooling of spreadsheet load, this should always have the same number of entries as colums
+	if (scalar(@parts)>0 ) {
 	    my $potential_p=scalar(@parts); # potential parts.
 	    #dump(%$o_entry); # this works.
 	    #use Data::Dumper;
@@ -1672,7 +1721,7 @@ sub cleanup_ontology_levels {
 	# Get ontology levels and assign structure to the different levels in the ultra meta hash.
 	#
 	my @onto_levels=();my $level_show_bool=0;
-	print($o_entry->{"Name"}."\t Line:".$o_entry->{"t_line"}."\n");
+	print("Line:".$o_entry->{"t_line"}."\t".$o_entry->{"Name"}."\n");
 	for(my $pn=0;$pn<=$#parts;$pn++){
 	    # process the different levels of ontology, get the different ontology names.
 	    # clean them up and put them into the onto_levels list.
@@ -1686,11 +1735,21 @@ sub cleanup_ontology_levels {
 	    trim($branch_name);
 	    my $level_name=$l_p{$branch_name};#
 	    my $tnum="";
+            # trim a leading number like 1_ into tnum, leaving the rest in branch_name.
 	    ($tnum,$branch_name)= $branch_name =~/^([0-9]+_)?(.*)$/;
 	    $tnum="" unless defined $tnum;
-	    #$branch_name=~ s/[,\/#]/_/xg;#clean structure name of dirty elements replaceing them for underscores.
-	    $branch_name=~ s/[,\/# ]/_and_/xg;#clean structure name of dirty elements replacing them with _and_.
-	    $branch_name=~ s/[-\/# ]/_to_/xg;#clean structure name of dirty elements replacing them with _to_.
+            #clean structure name of dirty elements
+            if ( $PAXINOS_RULES ) {
+                # replaceing [,/#] with underscores.
+                #$branch_name=~ s/[,\/#]/_/xg;
+                #replacing [,/# ] with _and_.
+                $branch_name=~ s/[,\/# ]/_and_/xg;
+                #[-/# ] replacing them with _to_.
+                $branch_name=~ s/[-\/# ]/_to_/xg;
+            } elsif ($ABA_RULES ) {
+                $branch_name=~ s/,/ the/xg;
+                $branch_name=~ s/[ ]/_/xg;
+            }
 	    if ( ( 0 )
 		 # THIS IS NOT DEACTIVATING THIS CODE, THIS IS FOR READABILITY LINEING THE CONDITIONS UP ON SUBSEQUENT LINES.
 		 || ( not defined $branch_name ) 
@@ -1699,15 +1758,15 @@ sub cleanup_ontology_levels {
 		 || ( $branch_name eq '0' ) 
 		) {
 		$level_show_bool=1;
-		warn("bad tree name, skipping to next level");
-		sleep_with_countdown(1);
+		warn("bad tree name(was empty), skipping to next level, Line:$o_entry->{t_line}");
+		#sleep_with_countdown(1);
 		next; 
 	    }
 	    if ( ( $branch_name =~ /_to_/x )
 		 || ($branch_name =~/_and_/x) ){
 		if ( ( $branch_name =~ /_to_/x )
 		     && ($branch_name =~/_and_/x) ) {
-		    die("WOW Really trying to get me arnt you! ontology_line:$o_entry->{t_line}.");
+		    die("WOW Really trying to get me arnt you! ontology_line:$o_entry->{t_line} \"Cleaned\": ($branch_name) Original:($parts[$pn]).");
 		}
 		# This is to split up entries with multiple pieces in the same cell.
 		# eg, BrainPart_left_and_BrainPart_right
