@@ -13,11 +13,11 @@ use pipeline_utilities;
 use civm_simple_util qw(activity_log load_file_to_array get_engine_constants_path printd file_update file_mod_extreme whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
 
 my $data_path="DataLibrariesRat/Wistar/Xmas2015Rat/v2018-10-04/";
-my $update_name="20181004_update";
+my $update_name="20181012_update";
 my $label_file_name="merge_labels";
-my $update_model_file="models_update_20181004";
+my $update_model_file="models_update_20181016";
 
-my $ontology_name="merged_ontologies";
+my $ontology_name="Ontology-Rat_v2_merge";
 my $ontology_name_out="RatBrain_civm_aba_v0.1_ontology";
 
 #../../v2018-03-13/Labels
@@ -28,7 +28,8 @@ if ( ! -d $feedback_dir) { `mkdir ${feedback_dir}`; }
 
 my $debug_val=20;# when doing new things, 75 is a good debug value as it will allow us to proceeeede with errors.
 my $DEBUGGING="-d $debug_val";
-print "This script is mostly obsolete!!!! Large swaths are ignored\n";
+print "This script is not really a general solution, each \"processing\" script is hand crafted for the data in question.\n
+FURTHERMORE: the supporting code is often also updated each version in ways which can make them incompatible!!!\n";
 
 use Cwd;
 my $dir = getcwd;
@@ -36,6 +37,13 @@ if ( ! -d "$data_path/$update_name/" ) {
     print "Missing dir:$data_path/$update_name/\n";
 }
 my $reprocess=0;#or 1 for true
+
+# there were so many challenges with first pass ontology, a script was written to clean up the problems,
+# hopefully that'll never be necessary again. WARNING: It is not really a general solution, it is very targed at
+# this data and aba ontology as captured. 
+# use test_tab_sheet_reconciler.bash to run the tab_sheet_reconciler.
+#./tab_sheet_reconciler.pl $part $full
+
 
 ###
 # find ants
@@ -197,7 +205,7 @@ if ( -f $labelfile && -f $avizo_nii && -f $xml ) {
     # there are other outputs, but they're more or less opaque
     #my @output=("$out_s_mrml");# there are other outputs, but they're more or less opaque
     my @output=($out_s_mrml);
-    $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_s_mrml -m $in_mrml -h $in_o_csv -k ABA_abbrev__name -g $out_o_csv -c $in_color -t $rt";
+    $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_s_mrml -m $in_mrml -h $in_o_csv  -g $out_o_csv -c $in_color -t $rt";
     # new run function emulating make file behavior.
     run_on_update($cmd,\@input,\@output);
     #
@@ -233,11 +241,11 @@ if ( -f $labelfile && -f $avizo_nii && -f $xml ) {
         # .../VoxPortSupport/slicer-to-avizo.pl < ${ln}.txt > ${ln}_hf.atlas.xml`;
         $cmd="$script < $out_color ";
         my @cmd_out=run_on_update($cmd,\@input,\@output);
-        if (scalar(@cmd_out)>0 ) { write_array_to_file($feedback_xml,\@cmd_out); 
+        if (scalar(@cmd_out)>0 ) { write_array_to_file($feedback_xml,\@cmd_out);
         } else {
             #die("No update?");
         }
-    }die;
+    }
     #
     # check if ontology changed, if it did, copy to stage 2.
     #
@@ -268,15 +276,6 @@ if ( -f $labelfile && -f $avizo_nii && -f $xml ) {
     }
     
     #
-    # remove excess mrml pieces using the mrml_key_strip
-    #
-    $script="./mrml_key_strip.pl";
-    @input=($script,$in_tract_mrml);
-    @output=($out_tract_mrml);
-    $cmd="$script $in_tract_mrml modelfile $out_tract_mrml";
-    @ks_out=run_on_update($cmd,\@input,\@output);
-    
-    #
     # move last mrml file out of the way.
     #
     if ( -f $mrml_endpoint ) {
@@ -301,8 +300,21 @@ if ( -f $labelfile && -f $avizo_nii && -f $xml ) {
     } else {
         #die("No update?");
     }
-    die;
+    
+    #
+    # remove excess tractography mrml pieces using the mrml_key_strip
+    #
+    if( -e $in_tract_mrml ) { 
+    $script="./mrml_key_strip.pl";
+    @input=($script,$in_tract_mrml);
+    @output=($out_tract_mrml);
+    $cmd="$script $in_tract_mrml modelfile $out_tract_mrml";
+    @ks_out=run_on_update($cmd,\@input,\@output);
+    } else {
+        print("No tractography ($in_tract_mrml).\n");
+    }
 }
+exit 0;
 sub run_idealist {
     funct_obsolete("run_idealist","pipeline_utilities::run_on_update");
     return run_on_update(@_);
