@@ -23,14 +23,16 @@
 use strict;
 use warnings;
 use Data::Dump qw(dump);
+use Carp qw(cluck confess croak carp);
 use Clone qw(clone);
-use Getopt::Std;
 use File::Basename;
-use Text::Trim qw(trim);
+use Getopt::Std;
 use List::MoreUtils qw(uniq);
+use Text::Trim qw(trim);
 
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
+
 use Env qw(RADISH_PERL_LIB WKS_SETTINGS); # root of radish pipeline folders
 if (! defined($RADISH_PERL_LIB)) {
     print STDERR "Cannot find good perl directories, quiting\n";
@@ -171,7 +173,7 @@ my $splitter={};#
 
 ### This splitter Regex is for the alex badea style color tables.
 # need a new/different one for anything else.
-$splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
+$splitter->{"Regex"}='^_?(.+?)(?:__?_?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
 $splitter->{"Input"}=[qw(Name Structure)];# reformulate structure column, keeping original in name
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
@@ -250,7 +252,7 @@ if(0){
 # determine the different file names and paths per each convention.
 # move files into appropriate destination place, from starting place/places.
 
-$splitter->{"Regex"}='^_?(.+?)(?:___?(.*))$';# taking this regex
+$splitter->{"Regex"}='^_?(.+?)(?:__?_?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
 
 # Ints not clear if splitter wants an array ref or what...
@@ -324,6 +326,9 @@ my $COLOR_TABLE_INSERTION_LINE=$c_count;# next insertion point.
 while ( exists($o_table->{"t_line"}->{$COLOR_TABLE_INSERTION_LINE}) ){
     $COLOR_TABLE_INSERTION_LINE++;
 }
+
+#text_sheet_utils::save_sheet($p_ontology_out,$o_table,sprintf("\t"));die;
+
 printf("Final color_table line number =".($COLOR_TABLE_INSERTION_LINE-1)."\n");
 #my $c_count=(scalar(keys %{$c_table->{"Structure"}}));# simple counts
 #my $o_count=(scalar(keys %{$o_table->{"Structure"}})); # simple counts
@@ -385,7 +390,7 @@ print("\tModel's:".(scalar(@mrml_nodes))."\n");
 # Output MUST be specified in the order splitter->{'Regex'} will return.
 # this is good for the RBSC, and didnt work for the mouse!
 # for names with format MODELPREFIX_NUMBER_ABBREV__NAME
-$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:___?(.*))?)$';
+$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:__?_?(.*))?)$';
 # taking this regex
 #$splitter->{"Regex"}='^.*$';
 # taking this regex, which is good for the RBSC, didnt work for the mouse!
@@ -485,7 +490,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	$c_entry=$c_table->{$tx}->{$n_a{$tx}};
     } else {
 	print("$mrml_name\n\tERROR, No color table Entry found!\n");
-	push(@missing_model_messages,"No color table entry".$mrml_name);
+	push(@missing_model_messages,"No color table entry ".$mrml_name);
     }
     ### 
     # get the ontology_table info by abbrev, or value, or Name
@@ -496,7 +501,7 @@ foreach my $mrml_model (@mrml_nodes) {
     # that lets us test for our most trustworthy and likely connected information.
     # In the case of models, the Name should be the same as the color table, 
     # and should be resolveable in the ontology. Unfortunately value is the least reliable in the ontology. 
-    my @o_test=qw(Name Abbrev Structure Value);  
+    my @o_test=qw(Structure Name Abbrev Value);  
     do {
 	$tx=shift(@o_test) ;
     } while(defined $n_a{$tx} 
@@ -794,15 +799,18 @@ foreach my $mrml_model (@mrml_nodes) {
 	# proccess the different levels of ontology, get the different ontology names, create a path to save the structure into.
 	#
 	my $branch_name=$parts[$pn];#meta structure name
-	trim($branch_name);		
+	trim($branch_name);
 	my $tnum="";
 	($tnum,$branch_name)= $branch_name =~/^([0-9]*_)?(.*)$/;
 	$tnum="" unless defined $tnum;
 	#universally trash tnum.
 	$tnum="";
-	$branch_name=~ s/[,\/# ]/_and_/xg;#clean structure name of dirty elements replacing them with _and_.
-	$branch_name=~ s/[-\/# ]/_to_/xg;#clean structure name of dirty elements replacing them with _to_.
+        if ( $PAXINOS_RULES ){
+            $branch_name=~ s/[,]/_and_/xg;#clean structure name of dirty elements replacing them with _and_.
+            $branch_name=~ s/[-]/_to_/xg;#clean structure name of dirty elements replacing them with _to_.
+        }
 	$branch_name=~ s/[,\/# ]/_/xg;#clean structure name of remaining dirty elements replacing them for underscores(commas forwardslashes poundsigns and spaces).
+        
 	$branch_name=~ s/__+/_/xg;  # Collapse any number of double underscore to single
 	if ( ( 0 )
 	     # THIS IS NOT DEACTIVATING THIS CODE, THIS IS FOR READABILITY LINEING THE CONDITIONS UP ON SUBSEQUENT LINES.
@@ -816,8 +824,10 @@ foreach my $mrml_model (@mrml_nodes) {
 	    next; 
 	}
 	if (! keys %{ $ontology } ) {
-	    if ( ( $branch_name =~ /_to_/x )
-		 || ($branch_name =~/_and_/x) ){
+	    if (  $PAXINOS_RULES 
+                 && ( ( $branch_name =~ /_to_/x )
+                      || ($branch_name =~/_and_/x) )  ){
+                
 		warn('DIRTY MULTI NAME, LAMELY TAKING JUST THE FIRST.');
 		my @b_parts=split("_to_",$branch_name);
 		my @b_parts2=split("_and_",$branch_name);
@@ -927,9 +937,9 @@ foreach my $mrml_model (@mrml_nodes) {
                 
                 if( exists($o_table->{$tx}->{$branch_name}) ) {
                     $op_entry=$o_table->{$tx}->{$branch_name};
-                    $nums[0]=$op_entry->{"c_R"};
-                    $nums[1]=$op_entry->{"c_G"};
-                    $nums[2]=$op_entry->{"c_B"};
+                    $nums[0]=$op_entry->{"c_R"}/255;
+                    $nums[1]=$op_entry->{"c_G"}/255;
+                    $nums[2]=$op_entry->{"c_B"}/255;
                 } else {
                     print("$branch_name not in ontology, using random color\n");
                 }
@@ -1141,6 +1151,9 @@ foreach my $mrml_model (@mrml_nodes) {
 }
 print("processed $processed_nodes/".scalar(@mrml_nodes)." nodes\n");
 dump(sort(@missing_model_messages));
+if ( scalar(@missing_model_messages)>( scalar(@mrml_nodes) * 0.1) ) {
+    confess "More than 10% of models errored!";
+}
 
 printf("ontology built\n");
 mrml_to_file($mrml_data,'  ',0,'pretty','',$p_mrml_out);
@@ -1165,22 +1178,35 @@ while( (scalar(@color_table_out) <= scalar(keys %{$c_table->{"t_line"}}) )
 		}
 	}
 	$line=join(" ",@{$c_entry}{@fields})."\n";
-	push(@color_table_out,$line);
+        if($line ne ""){
+            push(@color_table_out,$line);
+        } else {
+            carp("issue with color table line $test_line");
+            dump($c_entry);
+            sleep_with_countdown(4);
+        }
+
     }
     $test_line++;
 }
 print("Writing new color_table to $p_color_table_out\n");
 write_array_to_file($p_color_table_out,\@color_table_out);
+
 #
 # Save ontology, and derrived listings
 #
+my %h_o_hash;
+if ( 1 ) {
+    #my ($out_path,$table,$separator)=@_;
+    text_sheet_utils::save_sheet($p_ontology_out,$o_table,sprintf("\t"));
+} else {
 my @ontology_out=();
 #my @o_columns=keys %{$o_table->{'Header'}};#keys %$o_table;
 #@fields=qw(Structure Abbrev Level_1 Level_2 Level_3 Level_4 Value c_R c_G c_B c_A);# this was fine for the colortable as it had no header, but we can do better here.
 @fields=();
 #dump(%{$o_table->{"Header"}});#die;
 # this is the hash converstion code lets use it to build an inverse hash.. 
-my %h_o_hash;@h_o_hash{values(%{$o_table->{"Header"}})}=keys(%{$o_table->{"Header"}});#dump(%h_o_hash);#die
+@h_o_hash{values(%{$o_table->{"Header"}})}=keys(%{$o_table->{"Header"}});#dump(%h_o_hash);#die
 foreach my $idx (sort {$a<=>$b} (keys(%h_o_hash)) ) {# HAD TO FORCE NUMERICAL OR THIS WOULDNT WORK AS EXPECTED.
     push(@fields,$h_o_hash{$idx});
 }
@@ -1223,6 +1249,7 @@ while( (scalar(@ontology_out) <= scalar(keys %{$o_table->{"t_line"}}) )
 }
 print("Writing new ontology to $p_ontology_out\n");
 write_array_to_file($p_ontology_out,\@ontology_out);
+}
 
 my @super_structures_out=();
 my @super_structures_hf=();
@@ -1330,7 +1357,7 @@ for my $line_num(@lines){
 	    print("line $line_num broken_value.\n");
             dump($o_entry);
 	} else {
-	    warn("line $line_num invalid.");
+	    warn("line $line_num has no value assigned, is this invalid?");
 	}
     } else {
 	print("line $line_num removed\n");
@@ -1441,24 +1468,27 @@ sub cleanup_ontology_levels {
                 #warn("Line:$o_entry->{t_line} missing $check_field");
                 #dump($o_entry);die;
                 next;
-            }
+            } # elsif ( $check_field eq "Value" ) {
+            # die "VALUE CHECK DB STOP"; }
+            
 	    if ( exists($o_entry->{$check_field}) && ! exists($seen->{$check_field}->{$o_entry->{$check_field}}) ){ 
 		# not seen, no prob.
 		# $seen->{$check_field}->{$o_entry->{$check_field}} = ($o_entry->{$check_field});
 	    } else {
 		# Seen before, add conflicting line_numbers to the conflict list
 		push(@conflicts,@{$seen->{$check_field}->{$o_entry->{$check_field}}}  );
-		if ($check_field ne "Value" || $o_entry->{"Value"} != 0 ) {
+		if ($check_field ne "Value" || ( defined $o_entry->{"Value"} && $o_entry->{"Value"} != 0 ) ) {
 		    # add to error listing ONLY when its not value==0.
 		    push(@onto_errors,$seen->{$check_field}->{$o_entry->{$check_field}});
-		    push(@onto_error_msgs,"ERROR duplicate ontology $check_field. Line ".
+		    push(@onto_error_msgs,"ERROR: duplicate ontology $check_field. Line ".
 			 $o_entry->{"t_line"}." prev_count:".scalar(@{$seen->{$check_field}->{$o_entry->{$check_field}}}).".");
 		    push(@error_fields,$check_field);
 		}
 	    }
 	    push(@{$seen->{$check_field}->{$o_entry->{$check_field}}},$o_entry->{"t_line"}); # add to seen arrays.
 	}
-         # for many dupe fields the same line could be reported again
+        # for many dupe fields the same line could be reported again
+        # What to do with no value specified?
 	@conflicts=uniq(@conflicts);
 	my $auto_res=0;
 	my $check_count=scalar(@conflicts);
@@ -1499,10 +1529,15 @@ sub cleanup_ontology_levels {
 		$cur_d=compare_onto_lines($c_test,$alt_entry,@ignore);
 		if ( ! keys %{ $cur_d} ) {
 		    $bogus_color[1]=1;}
-		my $v_err=0; # how many 0 values do we have.
-		if ( $o_entry->{"Value"}==0 ) {
+                # how many 0 values do we have.
+		my $v_err=0;
+		if ( !exists($o_entry->{"Value"})
+                     || ( defined($o_entry->{"Value"})
+                          && $o_entry->{"Value"}==0 )  ) {
 		    $v_err++;}
-		if ( $alt_entry->{"Value"}==0 ){
+		if ( !exists($alt_entry->{"Value"})
+                     || ( defined($alt_entry->{"Value"})
+                          && $alt_entry->{"Value"}==0 )  ) {
 		    $v_err++;}
 		if ( $v_err!=2 ) { # One value is good.
 		    if (! exists($diff_->{"Abbrev"})
@@ -1520,8 +1555,7 @@ sub cleanup_ontology_levels {
 			} else {
 			    #no clear winnner
 			}
-			
-		    }
+                    }
 		}  else {# both values are bogus,
 		    if( exists($diff_->{"Abbrev"})      # and so is abbrev
 			&& exists($diff_->{"Name"}) ) { # and name
@@ -1568,7 +1602,7 @@ sub cleanup_ontology_levels {
 			    #
 			}
 		    }
-		} elsif (! exists($diff_->{"Value"}) ) { # value is same, name or abbrev are not.
+		} elsif (! exists($diff_->{"Value"}) && defined($diff_->{"Value"}) ) { # value is same, name or abbrev are not.
 		    # If The value is different but name/abbrev/structure are the same
    		    if ($bogus_color[0] && $o_entry->{"Value"}==0){ #val same, but not 0
 			# DELETE CURRENT
@@ -1652,11 +1686,15 @@ sub cleanup_ontology_levels {
 	    }
 	} else {
     	}
-	
-	my @parts=sort(keys %$o_entry); # get all the info types for this structure sorted.
-	#my @parts=@o_columns;
-	@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
-	#my @levels=@parts;
+
+        # get all the info types for this structure sorted.
+        # numeric simple sort which grants errors becuase they're strings with numbers. 
+	#my @parts=sort {$a<=>$b} (keys %$o_entry);
+        # Eliminate non number portions in sort, except now we get warnings if there aren't numbers.
+        #my @parts=sort { ($a=~/(\d+)/)[0]   <=>   ($b=~/(\d+)/)[0] } (keys %$o_entry);
+        #@parts=grep {/^Level_[0-9]+$/} @parts; # pair that down to only different ontology levels.
+        # In a bigger one liner, filter for only the Level's and then do the numeric only sort.
+        my @parts=sort { ($a=~/(\d+)/)[0]   <=>   ($b=~/(\d+)/)[0] } (grep {/^Level_[0-9]+$/} keys %$o_entry);
 	my %l_p;# level preference holder for all the meta_structures for this link in ontology.
         # with re-tooling of spreadsheet load, this should always have the same number of entries as colums
 	if (scalar(@parts)>0 ) {
@@ -1720,8 +1758,9 @@ sub cleanup_ontology_levels {
 	#
 	# Get ontology levels and assign structure to the different levels in the ultra meta hash.
 	#
-	my @onto_levels=();my $level_show_bool=0;
+	my @onto_levels=();my $level_show_bool=0;my $blank_levels=0;
 	print("Line:".$o_entry->{"t_line"}."\t".$o_entry->{"Name"}."\n");
+        #dump(\@parts);die;
 	for(my $pn=0;$pn<=$#parts;$pn++){
 	    # process the different levels of ontology, get the different ontology names.
 	    # clean them up and put them into the onto_levels list.
@@ -1758,12 +1797,21 @@ sub cleanup_ontology_levels {
 		 || ( $branch_name eq '0' ) 
 		) {
 		$level_show_bool=1;
-		warn("bad tree name(was empty), skipping to next level, Line:$o_entry->{t_line}");
+                $blank_levels++;
+		#warn("bad tree name(was empty), skipping to next level, Line:$o_entry->{t_line}");
+                # This is a great spot check, however we only need to be notified IF we're not the last entry.
 		#sleep_with_countdown(1);
 		next; 
 	    }
-	    if ( ( $branch_name =~ /_to_/x )
-		 || ($branch_name =~/_and_/x) ){
+            if ( $blank_levels>0 ) {
+                # first one both =1, new one, 
+                $level_show_bool=$blank_levels;
+                warn("Line:$o_entry->{t_line} had bad tree name(was empty). There may have been tab sheet transcription problems.");
+            }
+            
+	    if ( $PAXINOS_RULES 
+                 && ( ( $branch_name =~ /_to_/x )
+		 || ($branch_name =~/_and_/x) )  ) {
 		if ( ( $branch_name =~ /_to_/x )
 		     && ($branch_name =~/_and_/x) ) {
 		    die("WOW Really trying to get me arnt you! ontology_line:$o_entry->{t_line} \"Cleaned\": ($branch_name) Original:($parts[$pn]).");
@@ -1863,7 +1911,9 @@ sub cleanup_ontology_levels {
 		next;
 	    }
 	}
-
+        if ($blank_levels>0 && $level_show_bool>1 ) {
+            dump($o_entry);die;
+        }
 	# HERE WE SHOULD BE ABLE TO SEE PARTS
 	# dump(@onto_levels);
 	#sleep_with_countdown(15);
@@ -2228,7 +2278,7 @@ sub cleanup_ontology_levels {
 	my $err_t="";
 	if( ! scalar(@direct_assignments) ) {
 	    if ($o_entry->{"Name"} !~ /^Exterior|Inside$/x ) {
-		$err_stop=1;
+		$err_stop++;
 	    }
 	    $err_t="Err Line: ".$o_entry->{"t_line"}." ".join(",",@super_structs).")";
 	    my $t_hash;
@@ -2252,14 +2302,14 @@ sub cleanup_ontology_levels {
 	} else {
 	    print("HANGING STRUCTURE\n");
 	    dump($o_entry);
-	    my $msg="No assignments made for ($o_entry->{Name}), REMOVME THIS FROM YOUR LISTS!";
+	    my $msg="No assignments made for ($o_entry->{Name}), REMOVE THIS FROM YOUR LISTS!";
 	    cluck($msg);
 	    sleep_with_countdown(4);
 	}
 	#dump($o_entry);
     }
-    if ($err_stop){
-	die("Error understanding ontology table, see above.");
+    if ($err_stop>1){
+	die("Error understanding ontology table ($err_stop stop errors), see above.");
     }
     
     #
