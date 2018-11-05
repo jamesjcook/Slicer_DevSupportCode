@@ -78,7 +78,11 @@ my $rename_type=     $opt{"t"};
 # Simple booleans to switch between name cleanup formats, paxinos or aba.
 my $PAXINOS_RULES=0;
 my $ABA_RULES=1;
-
+# this controls if we force double underscore structure to spit into abbrev name 
+my $structure_separator_loose=0;
+# when we look at models, should we report on properly found colors/ontology entries,
+# and potentially renamed structures.
+my $rename_checking_verbosity=0;
 if (! defined $input_column) {
     $input_column="Structure";
 }
@@ -169,12 +173,24 @@ $header->{"c_A"}=5;
 my $splitter={};#
 # a aplitter to split a field into alternat parts. 
 #	my ($c_Abbrev,$c_name)= $tt_entry[1] =~/^_?(.+?)(?:___?(.*))$/;
-
-
 ### This splitter Regex is for the alex badea style color tables.
 # need a new/different one for anything else.
-$splitter->{"Regex"}='^_?(.+?)(?:__?_?(.*))$';# taking this regex
 #$splitter->{"Regex"}='^.*$';# taking this regex
+if ( $structure_separator_loose ) {
+    # for names with format 
+    # ABBREV__NAME
+    # ABBREV_NAME 
+    # _ABBREV_NAME 
+    # _ABBREV__NAME
+    # WARNING: This can cause trouble if there is no abbrev!!!!
+    $splitter->{"Regex"}='^_?(.+?)(?:__?_?(.*))$';
+} else {
+    # for names with format 
+    # ABBREV__NAME
+    # _ABBREV__NAME
+    # will also work for missing abbrev.
+    $splitter->{"Regex"}='^_?(.+?)(?:__(.*))$';
+}
 $splitter->{"Input"}=[qw(Name Structure)];# reformulate structure column, keeping original in name
 $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 ### This splitter Regex is for plain comma separated lists.
@@ -191,11 +207,9 @@ $splitter->{"Output"}=[qw(Abbrev Name)];  # generating these two
 
 #1 Cingulate_Cortex_Area_24a 255 0 0 255
 
-
 $header->{"Splitter"}=$splitter;
 $header->{"CommentFormat"}='^#.*';
 $header->{"Separator"}=" ";
-
 
 my $c_table=text_sheet_utils::loader($p_color_table_in,$header);
 #dump($c_table);
@@ -235,7 +249,6 @@ if ($d_abr||$d_nam||$d_str||$d_line){
     #print("THE END\n");exit;
 if  ($d_abr||$d_nam||$d_str){
     die;}
-
 my ($mrml_data,$xml_parser)=xml_read($p_mrml_in,'giveparser');
 
 if(0){
@@ -251,8 +264,21 @@ if(0){
 ###
 # determine the different file names and paths per each convention.
 # move files into appropriate destination place, from starting place/places.
-
-$splitter->{"Regex"}='^_?(.+?)(?:__?_?(.*))$';# taking this regex
+if ( $structure_separator_loose ) {
+    # for names with format 
+    # ABBREV__NAME
+    # ABBREV_NAME 
+    # _ABBREV_NAME 
+    # _ABBREV__NAME
+    # WARNING: This can cause trouble if there is no abbrev!!!!
+    $splitter->{"Regex"}='^_?(.+?)(?:__?_?(.*))$';
+} else {
+    # for names with format 
+    # ABBREV__NAME
+    # _ABBREV__NAME
+    # will also work for missing abbrev.
+    $splitter->{"Regex"}='^_?(.+?)(?:__(.*))$';
+}
 #$splitter->{"Regex"}='^.*$';# taking this regex
 
 # Ints not clear if splitter wants an array ref or what...
@@ -292,7 +318,7 @@ my $null;
 $ontology=cleanup_ontology_levels($o_table,$null);
 
 if ( 0 ) {
-    my @parts=qw/Hierarchy Branches Twigs SuperCount SuperLevel order_lookup/;
+    my @parts=qw/Hierarchy Branches Twigs/;# SuperCount/;# SuperLevel/;# order_lookup/;
     for my $part (@parts) {
         dump($part,%{$ontology->{$part}});
     }
@@ -389,8 +415,16 @@ print("\tModel's:".(scalar(@mrml_nodes))."\n");
 # grouping of the regex is what determines the output.
 # Output MUST be specified in the order splitter->{'Regex'} will return.
 # this is good for the RBSC, and didnt work for the mouse!
-# for names with format MODELPREFIX_NUMBER_ABBREV__NAME
-$splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:__?_?(.*))?)$';
+if ( $structure_separator_loose ) {
+    # for names with format MODELPREFIX_NUMBER_ABBREV__NAME
+    # OR for names with format MODELPREFIX_NUMBER_ABBREV_NAME
+    # WARNING: This can cause trouble if there is no abbrev!!!!
+    $splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:__?_?(.*))?)$';
+} else {
+    # for names with format MODELPREFIX_NUMBER_ABBREV__NAME,
+    # will also work for missing abbrev.
+    $splitter->{"Regex"}="^$model_prefix([0-9]+)_".'(_?(.+?)(?:__(.*))?)$';
+}
 # taking this regex
 #$splitter->{"Regex"}='^.*$';
 # taking this regex, which is good for the RBSC, didnt work for the mouse!
@@ -416,7 +450,14 @@ print("\tBegin model processing!\n");
 print("---\n\n\n");
 foreach my $mrml_model (@mrml_nodes) {
     # Names come from color_tables, so the names should follow a regular pattern here + the added slicer model gen bits.
-    my %n_a; # a holder for the multiple lookup possibilities for each model. 
+    # For simplicity slicer defaults are used most of the time, so the name should be a very regular pattern.
+    # for a color table entry of
+    # 1 THE_color_name 200 200 200 255
+    # the model should be called
+    # Model_1_THE_color_name
+    # In much of our data THE_color_name may be a composite abbrev__name,
+    # sometimes it is just the name, or, the color value and the name.
+    my %model_entry; 
     # This is a multiple level hash cross ref of the names and all the values. 
     # model names are split into the component parts, given the splitter defined above.
     # The default splitter used for paxinos/alex(RBSC)'s labels shows lookup potentials of:
@@ -435,39 +476,42 @@ foreach my $mrml_model (@mrml_nodes) {
     }
     
     if ( scalar(@field_keys) == scalar(@field_temp) ) {
-	@n_a{@field_keys} = @field_temp;
+	@model_entry{@field_keys} = @field_temp;
 	if (length($msg)>0){
 	    print($msg." But we've fudged it.\n");}
-        defined $n_a{$_} or delete $n_a{$_} for keys %n_a;
+        defined $model_entry{$_} or delete $model_entry{$_} for keys %model_entry;
     } else {
 	warn($msg." and couldnt recover. expected".scalar(@field_keys).", but we got ".scalar(@field_temp));
 	dump(@field_keys,@field_temp);
+        die "FORCE DEATH ON ANY MODEL WHICH DOESNT GIVE INFORMATION";
 	next;
     }
-    if ( $n_a{"Value"}==0 ){ # this throws an error becuase it may not be numeric... but it works anyway.
-	dump(\%n_a);
+    
+    if ( $model_entry{"Value"}==0 ){ # this throws an error becuase it may not be numeric... but it works anyway.
+	dump(\%model_entry);
 	print("Special exception for value 0\n");
+        $processed_nodes++;
 	next;
     }
-    #### NEED TO ENSURE THE n_a HASH IS CORRECT HERE.
+    #### NEED TO ENSURE THE model_entry HASH IS CORRECT HERE.
     # theoretically we've run the cleanup function ensuring the ontology is correct.
     #
     # For poorly formed entries we can have unfilled or missing fields!
     #
-    # n_a only has Value as a trustworty field.
-    if(! exists($n_a{"Name"}) && exists($n_a{"Abbrev"}) ){
-	$n_a{"Name"}=$n_a{"Abbrev"};
+    # model_entry only has Value as a trustworty field.
+    if(! exists($model_entry{"Name"}) && exists($model_entry{"Abbrev"}) ){
+	$model_entry{"Name"}=$model_entry{"Abbrev"};
     }
-    if(exists($n_a{"Name"}) && ! exists($n_a{"Abbrev"}) ){
-	$n_a{"Abbrev"}=$n_a{"Name"};
+    if(exists($model_entry{"Name"}) && ! exists($model_entry{"Abbrev"}) ){
+	$model_entry{"Abbrev"}=$model_entry{"Name"};
     }
-    # WARNING: n_a{"Structure"} is not necessarily the same as other fields. This is BAD name!!!!
-    if(!exists($n_a{"Name"})
-       || ! exists($n_a{"Value"})
-       || ! exists($n_a{"Abbrev"})
-       || ! exists($n_a{"Structure"}) ){
+    # WARNING: model_entry{"Structure"} is not necessarily the same as other fields. This is BAD name!!!!
+    if(!exists($model_entry{"Name"})
+       || ! exists($model_entry{"Value"})
+       || ! exists($model_entry{"Abbrev"})
+       || ! exists($model_entry{"Structure"}) ){
 	warn("Critical falure for model $mrml_name skipping...\n");
-	dump(%n_a);
+	dump(%model_entry);
 	sleep_with_countdown(15);
 	next;	
     }
@@ -483,37 +527,37 @@ foreach my $mrml_model (@mrml_nodes) {
     my $tx;
     do {
 	$tx=shift(@c_test) ;
-    } while(defined $n_a{$tx} 
-	    && ! exists ($c_table->{$tx}->{$n_a{$tx}} )
+    } while(defined $model_entry{$tx} 
+	    && ! exists ($c_table->{$tx}->{$model_entry{$tx}} )
 	    && $#c_test>0 );
-    if( exists($n_a{$tx}) && exists($c_table->{$tx}->{$n_a{$tx}}) ) {
-	$c_entry=$c_table->{$tx}->{$n_a{$tx}};
+    if( exists($model_entry{$tx}) && exists($c_table->{$tx}->{$model_entry{$tx}}) ) {
+	$c_entry=$c_table->{$tx}->{$model_entry{$tx}};
     } else {
 	print("$mrml_name\n\tERROR, No color table Entry found!\n");
 	push(@missing_model_messages,"No color table entry ".$mrml_name);
     }
     ### 
-    # get the ontology_table info by abbrev, or value, or Name
+    # get the ontology_table info by abbrev, or value, or Name, or Structure
     ###
-    # we sort throught the possible standard places it could be.
+    # we sort through the possible standard places it could be.
     # adding second chance via color lookup.
     # sets the test order, instead of just using the collection order of splitter->{'Output'}.
     # that lets us test for our most trustworthy and likely connected information.
     # In the case of models, the Name should be the same as the color table, 
     # and should be resolveable in the ontology. Unfortunately value is the least reliable in the ontology. 
-    my @o_test=qw(Structure Name Abbrev Value);  
+    my @o_test=qw( Value Name Abbrev Structure); 
     do {
-	$tx=shift(@o_test) ;
-    } while(defined $n_a{$tx} 
-	    && ! exists ($o_table->{$tx}->{$n_a{$tx}} )
+	$tx=shift(@o_test);
+    } while(defined $model_entry{$tx} 
+	    && ! exists ($o_table->{$tx}->{$model_entry{$tx}} )
 	    && $#o_test>0 );
-    if( exists($n_a{$tx}) && exists($o_table->{$tx}->{$n_a{$tx}}) ) {
-	$o_entry=$o_table->{$tx}->{$n_a{$tx}};
+    if( exists($model_entry{$tx}) && exists($o_table->{$tx}->{$model_entry{$tx}}) ) {
+	$o_entry=$o_table->{$tx}->{$model_entry{$tx}};
     } else {
 	print("$mrml_name\n\tERROR, No ontology Entry found!\n");
 	if ( 1 ) {
 	    push(@missing_model_messages,"No ontology table entry: ".$mrml_name);
-	    #dump(%n_a);
+	    #dump(%model_entry);
 	} else {
 	    #### Harder try to find the ontology using the colors.
 	    if ( not defined($o_entry) ) {
@@ -542,7 +586,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	    if( not defined $o_entry) {
 		print("$mrml_name\n\tERROR, No ontology Entry found!\n");
 		push(@missing_model_messages,"No ontology table entry: ".$mrml_name);
-		dump(%n_a);	
+		dump(%model_entry);	
 	    }
 	}
     }
@@ -554,7 +598,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	if ( ! defined($o_entry) && ! defined($c_entry) ) {
             # Both undefined, then define the colortable.
 	    warn("INVENTING INFORMATION for ".$mrml_name);
-	    $c_entry=\%{clone %n_a};
+	    $c_entry=\%{clone %model_entry};
 	    $c_entry->{"t_line"}=$COLOR_TABLE_INSERTION_LINE;
 	    {
 		my @c_vals=qw(c_R c_G c_B);
@@ -617,65 +661,38 @@ foreach my $mrml_model (@mrml_nodes) {
     } else {
 	#dump($c_entry);
     }
-    #next;
+    my $DB_STOP=0;
+    if ( ! exists($o_entry->{"DirectAssignment"} )  ) {
+        $DB_STOP=1;
+    } else {
+        if ( $rename_checking_verbosity ) {
+            print("Ready - ");
+            # detect model/lookup renames.
+            if ( $model_entry{"Name"} ne $o_entry->{"Name"} ) {
+                print($o_entry->{"Name"}." with val ".$o_entry->{"Value"}."\twas\t");
+            }
+            print($model_entry{"Name"}." with val ".$model_entry{"Value"}."\n");
+        }
+    }
+    dump(\%model_entry,$c_entry,$o_entry) if $DB_STOP;
+    die if $DB_STOP;
     ##TODO
     # now that we've found our ontolgoy and color table entries Combine that info in all three data locations.
-    # n_a has these fields Value Structure Abbrev Name. Value must match in all cases.
+    # model_entry has these fields Value Structure Abbrev Name. Value must match in all cases.
     # It should all ready match the color table.
     # o_entry has Value Structure Abbrev Name and c_R c_G c_B c_A and Level 1 .. N.
     # c_entry has Value Structure Abbrev Name and c_R c_G c_B c_A.
     # 
-    # We must trust value on n_a
-    # We take for granted that n_a abbrev, name and structure could be different from either color table or ontology.
+    # We must trust value on model_entry
+    # We take for granted that model_entry abbrev, name and structure could be different from either color table or ontology.
     # We should trust the data of o_entry the most. EXCEPT for value!
-    $o_entry->{"Value"}    =$n_a{"Value"};
+    $o_entry->{"Value"}    =$model_entry{"Value"};
     
     $c_entry->{"Value"}    =$o_entry->{"Value"};
     $c_entry->{"Name"}     =$o_entry->{"Name"};
     $c_entry->{"Abbrev"}   =$o_entry->{"Abbrev"};
     $c_entry->{"Structure"}=$o_entry->{"Structure"};
 
-    if ( 0 ) { #SPECAIL DEBUG PRINTS FOR HISTORICAL STRUCTURES AND DATA WITH ISSUES
-    if ( 0
-	 || $c_entry->{"Value"}==215
-	 || $c_entry->{"Value"}==634
-	 || $c_entry->{"Value"}==635
-	 || $c_entry->{"Value"}==761
-	 || $c_entry->{"Value"}==762
-	 || $c_entry->{"Value"}==764
-	 || $c_entry->{"Value"}==809
-	 || $c_entry->{"Value"}==811
-	){
-	if ( defined($o_entry) ) {
-	    dump($o_entry);}
-	if ( defined($c_entry) ) {
-	    dump($c_entry);}
-    }
-    #next;
-    if ( not defined($o_entry) ) {
-    	dump(%n_a);
-	if ( defined ($c_entry) ) {
-	    dump($c_entry ) ;}
-	if ( 0
-	     || $c_entry->{"Value"}==634
-	     || $c_entry->{"Value"}==635
-	     || $c_entry->{"Value"}==761
-	     || $c_entry->{"Value"}==762
-	     || $c_entry->{"Value"}==764
-	     || $c_entry->{"Value"}==799
-	     || $c_entry->{"Value"}==809
-	    ){
-	} else {
-	    #die;
-	}
-    }
-    #next;
-    }
-    
-    #if (! defined ($alt_name) ) {
-    #$alt_name=$Abbrev;
-    #$n_a{"Name"}=$Abbrev;
-    #}
     # set the o_entry color info to the c_table info.
     #DISABLEDCURRENTLY
     if ( 0) {
@@ -692,7 +709,7 @@ foreach my $mrml_model (@mrml_nodes) {
     } #DISABLEDCURRENTLY
        
     my $alt_name=$o_entry->{"Name"};
-    #my $Abbrev=$n_a{"Abbrev"};
+    #my $Abbrev=$model_entry {"Abbrev"};
     my $Abbrev  =$o_entry->{"Abbrev"};
     my $value   =$o_entry->{"Value"};
     my $parent_hierarchy_node_id=$rootHierarchyNodeID;
@@ -765,7 +782,7 @@ foreach my $mrml_model (@mrml_nodes) {
 	} else {
 	    print("Bad structure,\t");
 	    dump($o_entry);
-    	    die("no entries in hierarchy. DirectAssignmentsNotSpecified");
+    	    die("no entries in hierarchy. ERROR IN ONTOLOGY HANDLING? DirectAssignment NotSpecified!");
 	}
 	if(scalar(@parent_hierarchy_names)<1 ) {
 	    die("Bad structure, no entries in hierarchy.");
@@ -926,20 +943,27 @@ foreach my $mrml_model (@mrml_nodes) {
 
                 # CHECK FOR STRUCTURE IN ONTOLOGY, WE MAY HAVE COLOR THERE FOR SUPER STRUCTURES.
                 my @o_test=qw(Name Abbrev Structure Value);
-                # name may be 
-                my @o_ptest=qw(ABA_abbrev__name ABA_name ABA_abbrev );
+                # name may be
+                # this is vestigal, should only allow our specified names.
+                #my @o_ptest=qw(ABA_abbrev__name ABA_name ABA_abbrev );
                 # ontology parent entry. 
                 my $op_entry={};
                 do {
                     $tx=shift(@o_test);
                 } while(! exists ($o_table->{$tx}->{$branch_name} )
                         && $#o_test>0 );
-                
                 if( exists($o_table->{$tx}->{$branch_name}) ) {
                     $op_entry=$o_table->{$tx}->{$branch_name};
-                    $nums[0]=$op_entry->{"c_R"}/255;
-                    $nums[1]=$op_entry->{"c_G"}/255;
-                    $nums[2]=$op_entry->{"c_B"}/255;
+                    my @cx=qw(c_r c_G c_B c_A);
+                    for(my $cn=0;$cn<3; $cn++) {
+                        my $check_field=$cx[$cn];
+                        if ( exists($op_entry->{$check_field})
+                             && defined $op_entry->{$check_field} 
+                             && $op_entry->{$check_field} ne "" )
+                        {
+                            $nums[$cn]=$op_entry->{"c_R"}/255;
+                        }
+                    }
                 } else {
                     print("$branch_name not in ontology, using random color\n");
                 }
@@ -1151,8 +1175,12 @@ foreach my $mrml_model (@mrml_nodes) {
 }
 print("processed $processed_nodes/".scalar(@mrml_nodes)." nodes\n");
 dump(sort(@missing_model_messages));
-if ( scalar(@missing_model_messages)>( scalar(@mrml_nodes) * 0.1) ) {
+if ( scalar(@missing_model_messages)>( scalar(@mrml_nodes) * 0.4) ) {
     confess "More than 10% of models errored!";
+}
+if (  $processed_nodes != scalar(@mrml_nodes) ) {
+    carp("Not all mrml models found their color/ontology table entries");
+    sleep_with_countdown(8);
 }
 
 printf("ontology built\n");
@@ -1464,7 +1492,12 @@ sub cleanup_ontology_levels {
         # keys seen here should be Value,Structure,Name,t_line.
         # this checks those fields 
 	for my $check_field (keys(%$seen)) {
-            if ( ! exists($o_entry->{$check_field})  ) {
+            #defined $o_entry->{"Value"} && $o_entry->{"Value"} ne "" &&
+            if ( ! exists($o_entry->{$check_field})
+                 || ! defined $o_entry->{$check_field} 
+                 || ( defined $o_entry->{$check_field} && $o_entry->{$check_field} ne "" )
+                ) {
+                     # if this field is missing, or undefined, or empty string, dont worry about it.
                 #warn("Line:$o_entry->{t_line} missing $check_field");
                 #dump($o_entry);die;
                 next;
@@ -1477,7 +1510,7 @@ sub cleanup_ontology_levels {
 	    } else {
 		# Seen before, add conflicting line_numbers to the conflict list
 		push(@conflicts,@{$seen->{$check_field}->{$o_entry->{$check_field}}}  );
-		if ($check_field ne "Value" || ( defined $o_entry->{"Value"} && $o_entry->{"Value"} != 0 ) ) {
+		if ($check_field ne "Value" || (  $o_entry->{"Value"} != 0 ) ) {
 		    # add to error listing ONLY when its not value==0.
 		    push(@onto_errors,$seen->{$check_field}->{$o_entry->{$check_field}});
 		    push(@onto_error_msgs,"ERROR: duplicate ontology $check_field. Line ".
@@ -2306,7 +2339,10 @@ sub cleanup_ontology_levels {
 	    cluck($msg);
 	    sleep_with_countdown(4);
 	}
-	#dump($o_entry);
+        #if ( $o_entry->{"t_line"} == 49 ) {
+        #    dump($o_entry);
+        #    croak "test death";
+        #}
     }
     if ($err_stop>1){
 	die("Error understanding ontology table ($err_stop stop errors), see above.");
