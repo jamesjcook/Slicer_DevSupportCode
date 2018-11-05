@@ -18,15 +18,15 @@ my $reference_image="$data_path/Reg_S64550_labels.nii.gz";
 
 my $update_name="20180620_update";
 my $label_file_name="Labels_June_20_18-8";
-my $ontology_name="civm_human_brainstem_v0.67_ontology";  
-my $ontology_name_out="civm_human_brainstem_v0.68_ontology";
+my $ontology_name="civm_human_brainstem_v0.68_ontology_LW";
+my $ontology_name_out="civm_human_brainstem_v1.00_ontology";
 my $update_model_file="models_update_20180620_2";
 
 # make our feedback directory where we'll dump a bunch op debugging output.
-my $feedback_dir="${data_path}/${update_name}/_feedback";
+my $feedback_dir="${data_path}/${update_name}/_feedback_$ontology_name";
 if ( ! -d $feedback_dir) { `mkdir ${feedback_dir}`; }
 
-my $debug_val=20;# when doing new things, 75 is a good debug value as it will allow us to proceeeede with errors.
+$debug_val=20;# when doing new things, 75 is a good debug value as it will allow us to proceeeede with errors.
 my $DEBUGGING="-d $debug_val";
 print "This script is mostly obsolete!!!! Large swaths are ignored\n";
 
@@ -65,16 +65,16 @@ if ( ! -d "$ANTSPATH" ) {
     my $fp="$data_path/$update_name";
     my $labelfile="$fp/$label_file_name.am";
     #=`find $fp -maxdepth 1 -iname \"*am\" -exec basename \{\} \\;`;chomp($labelfile);    
-    my ($UNUSED,$ln,$le)=fileparts($labelfile,2);
-    if ( not defined $ln || $ln eq '' ) {
-        $ln='*';
-    }
+    #my ($UNUSED,$ln,$le)=fileparts($labelfile,2);
+    #if ( not defined $ln || $ln eq '' ) {
+    #    $ln='*';
+    #}
     #my $xmlname=`ls -tr $fp/$ln*xml|head -n 1|basename`;chomp($xmlname);
     my $xmlname="$label_file_name.atlas.xml";
     #	my $cmd="/Users/james/svnworkspaces/VoxPortSupport/slicer-to-avizo.pl < $stage2_color > $processed_xml";
     my $script="/Users/james/svnworkspaces/VoxPortSupport/amira-to-slicer-lbl.pl";
     my $xml=$fp.'/'.$xmlname;
-    my $txt=$fp.'/'."${ln}.atlas.txt";
+    my $txt=$fp.'/'."${label_file_name}.atlas.txt";
     my @input=($script,$xml);
     my @output=($txt);
     my $cmd="$script -xmlin $xml > $txt";
@@ -174,11 +174,14 @@ if ( ! -d "$ANTSPATH" ) {
     my $mrml_endpoint="${data_path}/models.mrml";
 
     my $in_tract_mrml="${data_path}/".
-        "tractography_update.mrml";
+        "tractography_update_20181105.mrml";
     # to prevent inplace crashes while tractography is still broken, we will
     # not update the tractography.mrml file in use. 
     my $out_tract_mrml="${data_path}/".
-        "tractography_update_clean.mrml";
+        "tractography_update_stripped.mrml";
+
+    my $tract_endpoint="${data_path}/".
+        "tractography_update_ready.mrml";
     
     # dsi_studio label names
     my $dsi_studio_label_index="${feedback_dir}/".
@@ -193,7 +196,7 @@ if ( ! -d "$ANTSPATH" ) {
     my @input=($script,$in_mrml,$in_o_csv,$in_color);
     # there are other outputs, but they're more or less opaque
     #my @output=("$out_s_mrml");# there are other outputs, but they're more or less opaque
-    my @output=($out_s_mrml);
+    my @output=($out_s_mrml,$out_o_csv);
     $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_s_mrml -m $in_mrml -h $in_o_csv -g $out_o_csv -c $in_color -t $rt";
     # new run function emulating make file behavior.
     run_on_update($cmd,\@input,\@output);
@@ -230,7 +233,9 @@ if ( ! -d "$ANTSPATH" ) {
         # .../VoxPortSupport/slicer-to-avizo.pl < ${ln}.txt > ${ln}_hf.atlas.xml`;
         $cmd="$script < $out_color ";
         my @cmd_out=run_on_update($cmd,\@input,\@output);
-        if (scalar(@cmd_out)>0 ) { write_array_to_file($feedback_xml,\@cmd_out); 
+        if (scalar(@cmd_out)>0 ) {
+            #$debug_val=45;
+            write_array_to_file($feedback_xml,\@cmd_out);
         } else {
             #die("No update?");
         }
@@ -251,7 +256,6 @@ if ( ! -d "$ANTSPATH" ) {
     $rt="Name";
     $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_t_mrml -m $in_mrml -h $stage2_csv -c $stage2_color -t $rt";
     run_on_update($cmd,\@input,\@output);
-
     #
     # remove excess mrml pieces using the mrml_key_strip
     #
@@ -263,7 +267,7 @@ if ( ! -d "$ANTSPATH" ) {
     if (scalar(@ks_out)){
         print("updated final mrml file $out_f_mrml\n");
     }
-    
+
     #
     # remove excess mrml pieces using the mrml_key_strip
     #
@@ -274,17 +278,27 @@ if ( ! -d "$ANTSPATH" ) {
     @ks_out=run_on_update($cmd,\@input,\@output);
     
     #
+    # filter tract mrml of bad atributes into our to the endpoint.
+    #
+    $script="./mrml_filter_tubeglyph.bash";
+    @input=($script,$out_tract_mrml);
+    @output=($tract_endpoint);
+    $cmd="$script $out_tract_mrml $tract_endpoint";
+    @ks_out=run_on_update($cmd,\@input,\@output);
+    
+    #
     # move last mrml file out of the way.
     #
     if ( -f $mrml_endpoint ) {
+        #die " stopping before we move old modelfile out of way.";
         my $orig_modelfile=move_to_timestamp($mrml_endpoint);
         if (! -f $orig_modelfile || -f $mrml_endpoint ) {
             die "Problem moving $mrml_endpoint to $orig_modelfile";
         }
     }
-    # copy final mrml to the endpoint.
+    # previously we just used copy. now we're adding a little processing.
     my $cp_mrml=file_update($out_f_mrml,$mrml_endpoint);
-
+    
     #
     # strip color parts of the colortable to give a name index in dsistudio
     #
@@ -298,7 +312,7 @@ if ( ! -d "$ANTSPATH" ) {
     } else {
         #die("No update?");
     }
-    die;
+    die "SCRIPT END";
 }
 sub run_idealist {
     funct_obsolete("run_idealist","pipeline_utilities::run_on_update");

@@ -38,12 +38,9 @@ use Data::Dump qw(dump);
 
 
 my $inmrml=$ARGV[0];
-#my $inpath=$ARGV[1];
 my $rename_type=$ARGV[1];
-#my $color_table_out="";
 my $outmrml=$ARGV[2];
 my $outmrml_n;
-#my @color_table;
 if ( ! defined $inmrml ) { 
     print("ERROR: no mrml specified");
     exit;
@@ -66,6 +63,35 @@ if ( ! defined $rename_type ) {
 
 #load_file_to_array($inpath,\@color_table);
 my ($xml_data,$xml_parser)=xml_read($inmrml,'giveparser');
+#dump(keys %{$xml_data->{"MRML"}});die;
+my @mrml_types=(
+#    "Layout",
+#    "Camera",
+    "version",
+    "userTags",
+    "TransformStorage",
+    "LinearTransform",
+#    "ScriptedModule",
+    "SubjectHierarchy",
+    "ModelStorage",
+    "ModelDisplay",
+    "ModelHierarchy",
+#    "View",
+#    "SceneViewStorage",
+#    "Selection",
+    "DiffusionTensorDisplayProperties",
+    "FiberBundle",
+    "FiberBundleGlyphDisplayNode",
+    "FiberBundleLineDisplayNode",
+    "FiberBundleTubeDisplayNode",
+#    "Interaction",
+#    "ClipModels",
+#    "SliceComposite",
+#    "Crosshair",
+#    "SceneView",
+#    "Slice",
+    );
+#dump(@mrml_types);die; 
 #{
 #    my ($n,$p,$e)=fileparts($inpath);
 #     $color_table_out=$p.$n."_$rename_type".$e;
@@ -82,19 +108,26 @@ my ($xml_data,$xml_parser)=xml_read($inmrml,'giveparser');
 # Defacto setup with a clean settings file, no tracts show up. There is a loading glitch in that instance(maybe missing extensions?)
 # After manually using correct settings, tube display is on by default.
 # Maybe deleting those nodes will address that, howver its not clear that is the right answer.
-# 
+#
 
-my @node_types_preserved=qw(MRML LinearTransform TransformStorage Version UserTags SubjectHierarchy SubjectHierarchyItem);
+my @node_types_preserved=qw(xml encoding MRML version userTags);
+my @transform_node_types=qw(LinearTransform TransformStorage);
+my @subject_node_types=qw(SubjectHierarchy SubjectHierarchyItem);
 my @model_node_types=qw(ModelHierarchy ModelDisplay Model ModelStorage );
-my @fiber_node_types=qw(FiberBundle DiffusionTensorDisplayProperties FiberBundleTubeDisplayNode FiberBundleLineDisplayNode FiberBundleGlyphDisplayNode);
+my @diffusion_node_types=qw(DiffusionTensorDisplayProperties FiberBundle FiberBundleLineDisplayNode);
+# FiberBundleTubeDisplayNode   FiberBundleGlyphDisplayNode);
+# tube display has terrible memory properties! making sure to cut those nodes out, and glyph for good measure.
+push(@node_types_preserved,@transform_node_types);
+push(@node_types_preserved,@subject_node_types);
 push(@node_types_preserved,@model_node_types);
-push(@node_types_preserved,@fiber_node_types);
+push(@node_types_preserved,@diffusion_node_types);
 #print("colortable ".($#color_table+1)." lines loaded\n");
 mrml_clear_nodes($xml_data,@node_types_preserved);
+# mrml clean attributes of dead pieces?... wow thats hard, gonna just sed ...
 mrml_to_file($xml_data,'  ',0,'pretty','',$outmrml);
 
-# not sure the purpo
-if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq 'abrev') {
+# not sure the purpose of this part any more.
+#if( $rename_type eq 'modelfile' || $rename_type eq 'ontology' || $rename_type eq 'abrev') {
 #    mrml_clear_nodes($xml_data,("ModelHierarchy","ModelDisplay","Version", "UserTags"));
 #    mrml_to_file($xml_data,'  ',0,'pretty','',$outmrm_n);
-}
+#}
