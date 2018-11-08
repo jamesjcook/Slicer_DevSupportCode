@@ -72,7 +72,8 @@ my @mrml_types=(
     "TransformStorage",
     "LinearTransform",
 #    "ScriptedModule",
-    "SubjectHierarchy",
+#    "SubjectHierarchy",
+#    "SubjectHierarchyItem",
     "ModelStorage",
     "ModelDisplay",
     "ModelHierarchy",
@@ -112,7 +113,9 @@ my @mrml_types=(
 
 my @node_types_preserved=qw(xml encoding MRML version userTags);
 my @transform_node_types=qw(LinearTransform TransformStorage);
-my @subject_node_types=qw(SubjectHierarchy SubjectHierarchyItem);
+# WARNING WARNING WARNING!
+# Subject hierarchy in stored MRML is fraught with challenges!
+my @subject_node_types=();#qw(SubjectHierarchy SubjectHierarchyItem);
 my @model_node_types=qw(ModelHierarchy ModelDisplay Model ModelStorage );
 my @diffusion_node_types=qw(DiffusionTensorDisplayProperties FiberBundle FiberBundleLineDisplayNode);
 # FiberBundleTubeDisplayNode   FiberBundleGlyphDisplayNode);

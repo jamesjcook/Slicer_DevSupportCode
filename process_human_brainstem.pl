@@ -14,6 +14,7 @@ use civm_simple_util qw(activity_log load_file_to_array get_engine_constants_pat
 my $data_path="DataLibrariesHuman/130827-2-0/v2018-06-20";
 
 # Alternatively, get last nii in place?
+# for things to work as expected, this MUST be the label nifti.
 my $reference_image="$data_path/Reg_S64550_labels.nii.gz";
 
 my $update_name="20180620_update";
@@ -174,7 +175,7 @@ if ( ! -d "$ANTSPATH" ) {
     my $mrml_endpoint="${data_path}/models.mrml";
 
     my $in_tract_mrml="${data_path}/".
-        "tractography_update_20181105.mrml";
+        "tractography_update_20181105_6.mrml";
     # to prevent inplace crashes while tractography is still broken, we will
     # not update the tractography.mrml file in use. 
     my $out_tract_mrml="${data_path}/".
@@ -190,6 +191,7 @@ if ( ! -d "$ANTSPATH" ) {
     ###
     # Clean up discrepancies between ontology and models/labels
     ###
+    # if we change names in our ontology we want to get a new label lookup for that.
     my $cmd='';
     #my @input=("$in_mrml","$in_o_csv","$in_color");
     my $script="./ontology_hierarchy_creator.pl";
@@ -204,6 +206,12 @@ if ( ! -d "$ANTSPATH" ) {
     # check if output was updated as expected.
     #
     # This shouldnt be necessary, however the ontology_hierarchy_creator is not particularly compliant.
+    # This is also incomplete relying on write order of output!
+    # should probably
+    #    ninput= file_mod_extreme (input new)
+    #    ooutput file_mod_extreme ( output old )
+    #    lfile=(file_mod_extreme (ninput ooutput,new)
+    #    if newest not ooutput
     my @f=@input;push(@f,@output);
     my $lf=file_mod_extreme(\@f,'new');
     if ($lf ne $out_s_mrml) {
@@ -217,15 +225,18 @@ if ( ! -d "$ANTSPATH" ) {
         die;
     }
     #
-    # check if color table changed, if it did, create new xml, and copy to stage 2.
+    # check if color table changed, if it did, create new xml, and copy color to stage 2.
     #
+    my $color_update=0;
     use File::Compare;
     if (compare($in_color,$out_color) == 0) {
         print("No color table update, will not copy");
         $stage2_color=$in_color;
+        $color_update=1;
     } else {
         # IF we updated the color table, .... ? who cares?
         # We havnt produced our final output anyway, lets make that now no matter what.
+        print("stage2color update!, feedback at $stage2_color\n");
         my $did_cp=file_update($out_color,$stage2_color);
         my $script="/Users/james/svnworkspaces/VoxPortSupport/slicer-to-avizo.pl";
         @input=($script,$out_color);
@@ -248,14 +259,53 @@ if ( ! -d "$ANTSPATH" ) {
         print("No ontology update, will not copy");
         $stage2_csv=$in_o_csv;
     } else {
+        print("Ontology Update!\n");
         my $did_cp=file_update($out_o_csv,$stage2_csv);
     }
-    @input=($script,$out_s_mrml,$stage2_csv,$stage2_color);
-    @output=($out_t_mrml);
-    # Copy new hierachy table to use later, and update ontology name.
+    #
+    # stage2 hierarchy build creating name based lookup table and model names.
+    #
     $rt="Name";
+    my ($p,$n,$e)=fileparts($stage2_color,3);
+    my $postfix="_${rt}_out";
+    my $stage2_out_color=$p.$n.$postfix.$e;
+    @input=($script,$out_s_mrml,$stage2_csv,$stage2_color);
+    @output=($out_t_mrml,$stage2_out_color);
     $cmd="./ontology_hierarchy_creator.pl $DEBUGGING  -o $out_t_mrml -m $in_mrml -h $stage2_csv -c $stage2_color -t $rt";
     run_on_update($cmd,\@input,\@output);
+    #
+    # if the lookup was updated put the new one in place.
+    #
+    my ($lp,$ln,$le)=fileparts($reference_image,2);
+    my $label_lookup="$lp${ln}_lookup.txt";
+    my @lookups=();
+    if ( -f $stage2_out_color ) {
+        push(@lookups,$stage2_out_color);
+    } else {
+        die ("Missing $stage2_out_color\n");
+    }
+    if ( -f $label_lookup ) {
+        push(@lookups,$label_lookup );
+    } else {
+        print("No file $label_lookup\n");
+    }
+    
+    my $newest_lookup=file_mod_extreme(\@lookups,'new');
+    if ($newest_lookup ne $label_lookup){
+        print("lookup update!\n");
+        if (compare($label_lookup,$stage2_out_color) == 0 ) {
+            # no difference even though newest is stage2
+        } else {
+            #print "Timestamp Move Time";
+            my $last_lookup=move_to_timestamp($label_lookup);
+            if (! -f $stage2_out_color || -f $label_lookup ) {
+                die "Problem with last lookup update/preservation!";
+            } else {
+                my $did_cp=file_update($stage2_out_color,$label_lookup);
+            }
+        }
+    }
+
     #
     # remove excess mrml pieces using the mrml_key_strip
     #
