@@ -1,0 +1,42 @@
+Due to intense slicers file path lengths in the super build.
+We need ultra short names.
+This is the implemenatation of a genius idea, 
+Useful mostly descriptive paths are specified, and then 
+the magic of md5 converts details to a short enough obfuscated path, 
+with a junction point ..
+So, we'll have a git-bash script take care of this
+by looking at our build indexes below(read this file after sigel line of dashes).
+
+qt5 dirs
+Qt5_DIR 
+L:\Dev\Qt\5.10.1\msvc2015_64\lib\cmake\Qt5
+Qt5_DIR 
+L:\Dev\Qt\5.11.1\msvc2015_64\lib\cmake\Qt5
+
+WARNING: qt 5.11 requies vs 2017 for full support. 
+WebEngine, and WebEngineWidgets are not available for vs2015
+To compile at 5.11 the 2017 dir was selected for ONLY those two components. Hope being they wont be used. 
+all the 5.11.1 tests failed on the missing components, in theory vs2017 could be installed and they'd work 
+but that is outside the supported config, so we wont bother. 
+
+Planning additional builds we want.
+l:\Dev\b\Av\IDENTIFIER\qt5.10.1\r
+l:\Dev\b\Av\IDENTIFIER\qt5.10.1\d
+
+tde is a test of brand new DataExplorer slicer custom app. It fails with same applications already compiled error. L:/Dev/src/DataExplorer
+rna is a test of renamed AtlasViewer dir in Applications. L:/Dev/src/AtlasViewerIP-2018-07-12-alt_custom_app
+rna2 is a second test of renamed AtlasViewer dir in applications with same source dir as rna, It is also set up for release build and 0 CTEST retests. 
+    Over all the renamed directory was unnecessary, however it was kept because it "looks better". The true problem was that our custom slicer commits replicated "new" functionality in the base slicer.
+rna3 is a third test, the chief difference is a reduced cmake black list of modules to omit. Only by commenting for now. 
+--- --- ---
+l:\Dev\b\s\qt5.11.1\n\20180712\r
+l:\Dev\b\s\qt5.11.1\n\20180712\d
+l:\Dev\b\s\qt5.10.1\n\20180712\r
+l:\Dev\b\s\qt5.10.1\n\20180712\d
+l:\Dev\b\s\qt5.10.1\ip\20180712\r
+l:\Dev\b\s\qt5.10.1\ip\20180712\d
+l:\Dev\b\av\qt5.10.1\ip\20180712\r
+l:\Dev\b\av\qt5.10.1\ip\20180712\d
+l:\Dev\b\av\qt5.10.1\ip\20180712\r2
+l:\Dev\b\av\qt5.10.1\ip\20180712\r3
+l:\Dev\b\av\qt5.10.1\ip\20180712\d2
