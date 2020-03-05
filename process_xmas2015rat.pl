@@ -15,10 +15,10 @@ use civm_simple_util qw(activity_log load_file_to_array get_engine_constants_pat
 my $data_path="DataLibrariesRat/Wistar/Xmas2015Rat/v2018-10-04/";
 my $update_name="20181012_update";
 my $label_file_name="merge_labels";
-my $update_model_file="models_update_20181016";
+my $update_model_file="models_update_20181029";
 
-my $ontology_name="Ontology-Rat_v2_merge";
-my $ontology_name_out="RatBrain_civm_aba_v0.1_ontology";
+my $ontology_name="Ontology-Rat_v3_merge";
+my $ontology_name_out="RatBrain_civm_aba_v0.3_ontology";
 
 #../../v2018-03-13/Labels
 my $reference_image="DataLibrariesRat/Wistar/Xmas2015Rat/v2018-03-13/merge_labels.nii";
