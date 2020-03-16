@@ -5,8 +5,10 @@ do ck=$(echo "$bp" > tmp && cksum tmp |cut -f 1 -d ' ' );
   if [ ! -d "$bp" ]; 
   then mkdir -p "$bp";
   fi;
-  if [ ! -e $ck ];
-  then /c/bin/junction "$ck" "$bp" ;
+  if [ ! -e $ck -a -x  /d/workstation/bin/junction ];
+  then /d/workstation/bin/junction "$ck" "$bp" ;
+  else
+  echo no junction, or already exists. 
   fi;  
 done;
 ls -ltr;
