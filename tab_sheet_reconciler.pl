@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/env perl
 # Take two tab sheets, and filter/sort information
 # Wowo this is tough...
 # This was written to take a simple abbrev__name, parent_path spreadsheet and get the entries from a complete sheet.
@@ -12,8 +12,8 @@ use Data::Dump qw(dump);
 use Clone qw(clone);
 use Getopt::Std;
 use File::Basename;
-use Text::Trim qw(trim);
-use List::MoreUtils qw(uniq);
+#use Text::Trim qw(trim);
+#use List::MoreUtils qw(uniq);
 
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
@@ -23,9 +23,9 @@ if (! defined($RADISH_PERL_LIB)) {
     exit $ERROR_EXIT;
 }
 use lib split(':',$RADISH_PERL_LIB);
-require Headfile;
-require pipeline_utilities;
-use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
+use Headfile;
+use pipeline_utilities;
+use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown trim uniq $debug_val $debug_locator);
 use text_sheet_utils;
 
 
@@ -455,9 +455,10 @@ sub main {
     }
     # Save!
     my ($p,$n,$e)=fileparts($partial_info_path,3);
-    my $out_path=$p.$n.'_merge'.$e;
+    my $out_path=File::Spec->catfile($p,$n.'_merge'.$e);
     
     text_sheet_utils::save_sheet($out_path,$out_table);
+    print("Saved $out_path\n");
     return 0;
 }
 
