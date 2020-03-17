@@ -30,7 +30,7 @@ require Headfile;
 #import hoaoa qw(aoa_hash_to_headfile);
 #use hoaoa qw(aoa_hash_to_headfile display_header display_complex_data_structure);
 #require shared;
-require pipeline_utilities;
+use pipeline_utilities;
 use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);di
 
 use Data::Dump qw(dump);
@@ -41,23 +41,23 @@ my $inmrml=$ARGV[0];
 my $rename_type=$ARGV[1];
 my $outmrml=$ARGV[2];
 my $outmrml_n;
-if ( ! defined $inmrml ) { 
+if ( ! defined $inmrml ) {
     print("ERROR: no mrml specified");
     exit;
 }
-if ( ! defined $rename_type ) { 
+if ( ! defined $rename_type ) {
     $rename_type='modelfile';
 }
 {
     my ($p,$n,$e)=fileparts($inmrml,2);
-    if ($rename_type eq 'clean' ) { 
-	$outmrml_n=$p.$n."_template".$e;
-	$outmrml=$p.$n."_mhn".$e  if ( ! defined $outmrml ) ;
+    if ($rename_type eq 'clean' ) {
+	$outmrml_n=File::Spec->catfile($p,$n."_template".$e);
+	$outmrml=File::Spec->catfile($p,$n."_mhn".$e)  if ( ! defined $outmrml ) ;
     } else {
-	$outmrml_n=$p.$n."_template".$e ;
-	$outmrml=$p.$n."_$rename_type".$e if ( ! defined $outmrml ) ;
+	$outmrml_n=File::Spec->catfile($p,$n."_template".$e) ;
+	$outmrml=File::Spec->catfile($p,$n."_$rename_type".$e) if ( ! defined $outmrml ) ;
     }
-    
+
     print("Auto mrml out will be \"$outmrml\".\n") if ( ! defined $outmrml ) ;
 }
 
@@ -92,7 +92,7 @@ my @mrml_types=(
 #    "SceneView",
 #    "Slice",
     );
-#dump(@mrml_types);die; 
+#dump(@mrml_types);die;
 #{
 #    my ($n,$p,$e)=fileparts($inpath);
 #     $color_table_out=$p.$n."_$rename_type".$e;

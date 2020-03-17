@@ -17,16 +17,16 @@ use civm_simple_util qw(activity_log load_file_to_array write_array_to_file get_
 my $in_o_csv='I:/RatBrainAtlas/Ontology/Ontology-Rat_v4.3.csv';
 
 # looks like i was running these one at a time, i should emulate that for now.
-#my $mrml_endpoint='D:/Libraries/Brain/Rattus_norvegicus/Wistar/RatAvg2019/v2019-06-19/models.mrml';
+my $mrml_endpoint='D:/Libraries/Brain/Rattus_norvegicus/Wistar/RatAvg2019/v2019-06-19/models.mrml';
 #my $model_path='D:/Libraries/Brain/Rattus_norvegicus/Wistar/RatAvg2019/v2019-06-19/labels/xmas2015rat_symmetric_cropped/StaticRender';
+my $in_color='D:/Libraries/Brain/Rattus_norvegicus/Wistar/RatAvg2019/v2019-06-19/labels/xmas2015rat_symmetric_cropped/RatAvg2019_xmas2015rat_symmetric_cropped_20190118_labels_lookup.txt';
 
-
-# The end point mrml file is what will be used by the application. We often star with the same file and run it through several passes of  data reconcilliation/cleanup.
-my $mrml_endpoint='D:/Libraries/Brain/Rattus_norvegicus/Wistar/151124_3_1/v2019-04-18/models.mrml';
+# The end point mrml file is what will be used by the application. We often start with the same file and run it through several passes of  data reconcilliation/cleanup.
+#my $mrml_endpoint='D:/Libraries/Brain/Rattus_norvegicus/Wistar/151124_3_1/v2019-04-18/models.mrml';
 # Models are hiding in a deeper uglier directory
 #D:/Libraries/Brain/Rattus_norvegicus/Wistar/151124_3_1/v2019-04-18/scalars/atlas/labels/xmas2015rat_symmetric_cropped/StaticRender
+#my $in_color='D:/Libraries/Brain/Rattus_norvegicus/Wistar/151124_3_1/v2019-04-18/scalars/atlas/labels/xmas2015rat_symmetric_cropped/xmas2015_labels_20190614_atlas_lookup.txt';
 
-my $in_color='D:/Libraries/Brain/Rattus_norvegicus/Wistar/151124_3_1/v2019-04-18/scalars/atlas/labels/xmas2015rat_symmetric_cropped/xmas2015_labels_20190614_atlas_lookup.txt';
 
 my ($jnk,$ontology_name,$o_e)=fileparts($in_o_csv,3);
 my ($data_path)=dirname($mrml_endpoint);

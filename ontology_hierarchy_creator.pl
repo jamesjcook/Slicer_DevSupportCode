@@ -22,7 +22,7 @@
 
 use strict;
 use warnings;
-#use Data::Dump qw(dump);
+use Data::Dump qw(dump);
 use Carp qw(cluck confess croak carp);
 #use Clone qw(clone);
 use Storable qw(dclone);
@@ -47,7 +47,7 @@ use Headfile;
 #import hoaoa qw(aoa_hash_to_headfile);
 #use hoaoa qw(aoa_hash_to_headfile display_header display_complex_data_structure);
 use pipeline_utilities;
-use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
+use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown uniq trim $debug_val $debug_locator);
 use text_sheet_utils;
 our %opt;
 if (! getopts('d:c:g:h:k:m:o:t:', \%opt||$#ARGV>=0)) {
@@ -115,26 +115,26 @@ if ( $rename_type !~/(Clean|Name|Structure|Abbrev)/x ) {
 if ( ! defined $p_mrml_out ) {
     my ($p,$n,$e)=fileparts($p_mrml_in,3);
     #print "n=$n p=$p e=$e\n";
-    $p_mrml_out=$p.$n."_".$rename_type."_out".$e;
+    $p_mrml_out=File::Spec->catfile($p,$n."_".$rename_type."_out".$e);
     print("Auto mrml out will be \"$p_mrml_out\".\n") ;
 }
 
 # Temp path vars, to be reused constantly.
 my ($Tp,$Tn,$Te)=fileparts($p_color_table_in,3);
-my $p_color_table_out=           $Tp.$Tn."_".$rename_type."_out".$Te;
+my $p_color_table_out=File::Spec->catfile($Tp,$Tn."_".$rename_type."_out".$Te);
 
 if ( ! exists($opt{"g"}) ) {
     ($Tp,$Tn,$Te)=fileparts($p_ontology_in,3);
-    $p_ontology_out=            $Tp.$Tn."_".$rename_type."_out".$Te;
+    $p_ontology_out=File::Spec->catfile($Tp,$Tn."_".$rename_type."_out".$Te);
 
 } else {
     ($Tp,$Tn,$Te)=fileparts($p_ontology_out,3);
 }
 # set additional output paths....
-my $p_ontology_components_out=   $Tp.$Tn."_".$rename_type."_Components_out".$Te;
-my $p_ontology_components_out_hf=$Tp.$Tn."_".$rename_type."_Components_out.headfile";
-my $p_ontology_levelvoting_out=  $Tp.$Tn."_".$rename_type."_LevelVoting_out".$Te;
-my $p_ontology_assignment_out=   $Tp.$Tn."_".$rename_type."_assignment_out".$Te;
+my $p_ontology_components_out=   File::Spec->catfile($Tp,$Tn."_".$rename_type."_Components_out".$Te);
+my $p_ontology_components_out_hf=File::Spec->catfile($Tp,$Tn."_".$rename_type."_Components_out.headfile");
+my $p_ontology_levelvoting_out=  File::Spec->catfile($Tp,$Tn."_".$rename_type."_LevelVoting_out".$Te);
+my $p_ontology_assignment_out=   File::Spec->catfile($Tp,$Tn."_".$rename_type."_assignment_out".$Te);
 
 my @input_errors=();
 for my $f (($p_mrml_in,$p_color_table_in,$p_ontology_in)) {
